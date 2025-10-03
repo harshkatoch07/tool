@@ -329,12 +329,24 @@ function DashboardPageInner() {
     ];
   }, [dataInitiated, dataAssigned]);
 
-   const handleKpiClick = useCallback(
+  const handleKpiClick = useCallback(
     (label) => {
       if (loading) return;
-      setTab(label === "Assigned" ? 1 : 0);
+       const tabParams = {
+        Assigned: "assigned",
+        Initiated: "initiated",
+        Approved: "approved",
+        "Sent Back": "sentback",
+        Rejected: "rejected",
+      };
+
+      const tabKey = tabParams[label];
+      if (!tabKey) return;
+
+      const search = new URLSearchParams({ tab: tabKey }).toString();
+      navigate(`/approvals?${search}`);
     },
-    [loading, setTab]
+    [loading, navigate]
   );
   // Department options
   const deptOptions = useMemo(() => {
