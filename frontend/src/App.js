@@ -48,7 +48,6 @@ function App() {
           <Route index element={<AdminDashboard />} />
           <Route path="users" element={<UserManagement />} />
           <Route path="reports/user-activity" element={<UserActivityReport />} />
-```
           <Route path="workflows" element={<WorkflowList />} />
           <Route path="workflows/new" element={<WorkflowForm />} />
           <Route path="workflows/:id/edit" element={<WorkflowForm />} />
