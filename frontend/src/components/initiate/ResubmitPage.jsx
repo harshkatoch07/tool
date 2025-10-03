@@ -88,7 +88,12 @@ export default function ResubmitPage() {
     if (reason === "clickaway") return;
     setApproverFeedback((prev) => ({ ...prev, open: false }));
   };
-
+const isApproverTab = effectiveTab === "assigned";
+  const isReadOnlyTab = effectiveTab === "approved";
+  const allowAttachmentEdit = !(isApproverTab || isReadOnlyTab);
+  const showButtonsConfig = isApproverTab
+    ? { approve: true, sentBack: true, reject: true, approveWithModification: true }
+    : undefined;
  
   if (loading && !error) {
     return (
@@ -107,10 +112,7 @@ export default function ResubmitPage() {
   }
 
   // Always show attachments. Allow editing only when not assigned/approved.
-  const allowAttachmentEdit = !(effectiveTab === "assigned" || effectiveTab === "approved");
-  const isApproverTab = effectiveTab === "assigned";
-  const isReadOnlyTab = effectiveTab === "approved";
-
+  
   return (
     <Box sx={{ width: "100%", maxWidth: 1600, mx: "auto" }}>
       <ApprovalPathDialog open={openPath} onClose={() => setOpenPath(false)} trail={trail} />
@@ -119,13 +121,9 @@ export default function ResubmitPage() {
         <InitiateForm
           key={viewKey}
           disabled={isApproverTab || isReadOnlyTab}
-          hideActions={isReadOnlyTab}
+          hideActions={false}
           mode={isApproverTab ? "approver" : "initiator"}
-          showButtons={
-            isApproverTab
-              ? { approve: true, sentBack: true, reject: true, approveWithModification: true }
-              : undefined
-          }
+          showButtons={showButtonsConfig}
           tabKey={effectiveTab}
           requestId={approvalId}
           formData={formData}
