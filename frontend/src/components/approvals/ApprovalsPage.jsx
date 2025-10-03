@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { Box, Paper, Typography, CircularProgress, Alert, Button } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { Box, Paper, Typography, CircularProgress, Alert, Button, Snackbar } from "@mui/material";
+import { useLocation, useNavigate } from "react-router-dom";
 import { getApprovals, getApprovalTrail } from "../../api/approvalsApi";
 import ArrowBackIosNewRoundedIcon from "@mui/icons-material/ArrowBackIosNewRounded";
 import FilterListRoundedIcon from "@mui/icons-material/FilterListRounded";
@@ -161,6 +161,7 @@ const byTab = (tab, rows) => {
 
 export default function ApprovalsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // URL is the single source of truth for tab
   const [tab] = useUrlTab("assigned", "tab");
@@ -168,7 +169,7 @@ export default function ApprovalsPage() {
   const [rows, setRows] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
+const [snackbar, setSnackbar] = useState({ open: false, message: "" });
   // table UI state
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(30);
@@ -186,6 +187,14 @@ export default function ApprovalsPage() {
   const [trailLoading, setTrailLoading] = useState(false);
   const [trailError, setTrailError] = useState("");
   const [trailCache, setTrailCache] = useState({});
+
+  useEffect(() => {
+    const message = location.state?.snackbar?.message;
+    if (message) {
+      setSnackbar({ open: true, message });
+      navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.search, location.state, navigate]);
 
   // load list on tab change
   useEffect(() => {
@@ -255,17 +264,17 @@ export default function ApprovalsPage() {
   const fetchTrail = useCallback(async (fundRequestId) => getApprovalTrail(fundRequestId), []);
 
   const navigateToEdit = useCallback(
-    (row) => {
-      const fundRequestId = row.fundRequestId ?? row.ref;
-      if (tab === "initiated" || tab === "sentback" || tab === "assigned") {
-       const approvalId = row.approvalId ?? row.id;
-        const qs = new URLSearchParams({ tab, ...(approvalId ? { approvalId: String(approvalId) } : {}) });
-        navigate(`/resubmit/${fundRequestId}?${qs.toString()}`);
-      } else {
-        const approvalId = row.approvalId ?? row.id;
-        const qs = new URLSearchParams({ tab, ...(approvalId ? { approvalId: String(approvalId) } : {}) });
-        navigate(`/approvals/${fundRequestId}/edit?${qs.toString()}`);
-      }
+  (row) => {
+        const fundRequestId = row.fundRequestId ?? row.ref;
+        if (tab === "initiated" || tab === "sentback" || tab === "assigned") {
+          const approvalId = row.approvalId ?? row.id;
+          const qs = new URLSearchParams({ tab, ...(approvalId ? { approvalId: String(approvalId) } : {}) });
+          navigate(`/resubmit/${fundRequestId}?${qs.toString()}`);
+        } else {
+          const approvalId = row.approvalId ?? row.id;
+          const qs = new URLSearchParams({ tab, ...(approvalId ? { approvalId: String(approvalId) } : {}) });
+          navigate(`/approvals/${fundRequestId}/edit?${qs.toString()}`);
+        }
     },
     [navigate, tab]
   );
@@ -318,6 +327,10 @@ export default function ApprovalsPage() {
     if (!trailData || !trailRow) return null;
     return adaptTrailForDialogDto(trailData, trailRow);
   }, [trailData, trailRow]);
+ const handleSnackbarClose = (_, reason) => {
+    if (reason === "clickaway") return;
+    setSnackbar((prev) => ({ ...prev, open: false }));
+  };
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 } }}>
@@ -435,6 +448,16 @@ export default function ApprovalsPage() {
         loading={trailLoading}
         error={trailError}
       />
+        <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert onClose={handleSnackbarClose} severity="success" sx={{ width: "100%" }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
