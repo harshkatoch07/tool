@@ -30,10 +30,13 @@ export default function ApproverActionBar({ id: requestId, approvalId, onDone })
       alert("Missing approvalId in URL. Open this request from the Assigned tab.");
       return;
     }
+    const currentAction = action;
     try {
       setBusy(true);
-      await postApprovalAction(approvalId, action, comments);
-      if (typeof onDone === "function") onDone();
+      const result = await postApprovalAction(approvalId, currentAction, comments);
+      if (typeof onDone === "function") {
+        await onDone({ action: currentAction, result, comments });
+      }
     } catch (e) {
       alert(e.message || "Failed to perform action");
     } finally {

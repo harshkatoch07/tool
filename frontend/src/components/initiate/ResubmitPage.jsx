@@ -1,7 +1,7 @@
 // src/components/initiate/ResubmitPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { Box, CircularProgress } from "@mui/material";
+import { Box, CircularProgress, Snackbar, Alert } from "@mui/material";
 import { getApprovalTrail } from "../../api/approvalsApi";
 import { http, authHeaders } from "../../api/http";
 import InitiateForm from "../forms/InitiateForm";
@@ -20,7 +20,8 @@ export default function ResubmitPage() {
   const [formData, setFormData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
+   const [formDismissed, setFormDismissed] = useState(false);
+  const [approverFeedback, setApproverFeedback] = useState({ open: false, message: "", action: null, result: null });
   const effectiveTab = useMemo(() => {
     const raw = (search.get("tab") || "assigned").toLowerCase();
     return ALLOWED_TABS.includes(raw) ? raw : "assigned";
@@ -35,6 +36,11 @@ export default function ResubmitPage() {
       .catch(() => alive && setTrail(null));
     return () => { alive = false; };
   }, [approvalId]);
+
+  useEffect(() => {
+    setFormDismissed(false);
+    setApproverFeedback({ open: false, message: "", action: null, result: null });
+  }, [approvalId, effectiveTab]);
 
   useEffect(() => {
     let alive = true;
@@ -67,6 +73,28 @@ export default function ResubmitPage() {
     () => `${approvalId || ""}:${effectiveTab}:${formData ? "ready" : "loading"}`,
     [approvalId, effectiveTab, formData]
   );
+const handleApproverDone = ({ action, result } = {}) => {
+    const key = String(action || "").toLowerCase();
+    const messageMap = {
+      approve: "Request approved successfully.",
+      reject: "Request rejected successfully.",
+      sendback: "Request sent back successfully.",
+    };
+    const message = messageMap[key] || "Action completed successfully.";
+    setApproverFeedback({ open: true, message, action, result });
+    setFormDismissed(true);
+  };
+
+  const handleToastClose = (_, reason) => {
+    if (reason === "clickaway") return;
+    setApproverFeedback((prev) => ({ ...prev, open: false }));
+  };
+
+  const handleToastExited = () => {
+    if (formDismissed) {
+      navigate(`/approvals?tab=${effectiveTab}`);
+    }
+  };
 
   if (loading && !error) {
     return (
@@ -93,28 +121,48 @@ export default function ResubmitPage() {
     <Box sx={{ width: "100%", maxWidth: 1600, mx: "auto" }}>
       <ApprovalPathDialog open={openPath} onClose={() => setOpenPath(false)} trail={trail} />
 
-      <React.Fragment key={viewKey}>
-        <InitiateForm
-          key={viewKey}
-         disabled={isApproverTab || isReadOnlyTab}
-          hideActions={isReadOnlyTab}
-          mode={isApproverTab ? "approver" : "initiator"}
-          showButtons={
-           isApproverTab
-              ? { approve: true, sentBack: true, reject: true, approveWithModification: true }
-              : undefined
-          }
-          tabKey={effectiveTab}
-          requestId={approvalId}
-          formData={formData}
-          showAttachments={true}
-          allowAttachmentEdit={allowAttachmentEdit}
-          onCancel={() => navigate(`/approvals?tab=${effectiveTab}`)}
-          onUpdate={() => navigate(`/approvals?tab=${effectiveTab}`)}
-          showPathButton
-          onOpenPath={() => setOpenPath(true)}
-        />
-      </React.Fragment>
+     {!formDismissed ? (
+        <React.Fragment key={viewKey}>
+          <InitiateForm
+            key={viewKey}
+            disabled={isApproverTab || isReadOnlyTab}
+            hideActions={isReadOnlyTab}
+            mode={isApproverTab ? "approver" : "initiator"}
+            showButtons={
+              isApproverTab
+                ? { approve: true, sentBack: true, reject: true, approveWithModification: true }
+                : undefined
+            }
+            tabKey={effectiveTab}
+            requestId={approvalId}
+            formData={formData}
+            showAttachments={true}
+            allowAttachmentEdit={allowAttachmentEdit}
+            onCancel={() => navigate(`/approvals?tab=${effectiveTab}`)}
+            onUpdate={() => navigate(`/approvals?tab=${effectiveTab}`)}
+            showPathButton
+            onOpenPath={() => setOpenPath(true)}
+            onApproverDone={isApproverTab ? handleApproverDone : undefined}
+          />
+        </React.Fragment>
+      ) : (
+        <Box sx={{ p: 3 }}>
+          <CircularProgress size={24} sx={{ mr: 1, verticalAlign: "middle" }} />
+          Processing action…
+        </Box>
+      )}
+
+      <Snackbar
+        open={approverFeedback.open}
+        autoHideDuration={4000}
+        onClose={handleToastClose}
+        onExited={handleToastExited}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert onClose={handleToastClose} severity="success" sx={{ width: "100%" }}>
+          {approverFeedback.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
