@@ -258,7 +258,9 @@ export default function ApprovalsPage() {
     (row) => {
       const fundRequestId = row.fundRequestId ?? row.ref;
       if (tab === "initiated" || tab === "sentback" || tab === "assigned") {
-        navigate(`/resubmit/${fundRequestId}?tab=${tab}`);
+       const approvalId = row.approvalId ?? row.id;
+        const qs = new URLSearchParams({ tab, ...(approvalId ? { approvalId: String(approvalId) } : {}) });
+        navigate(`/resubmit/${fundRequestId}?${qs.toString()}`);
       } else {
         const approvalId = row.approvalId ?? row.id;
         const qs = new URLSearchParams({ tab, ...(approvalId ? { approvalId: String(approvalId) } : {}) });
