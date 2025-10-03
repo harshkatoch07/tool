@@ -432,7 +432,7 @@ request.CurrentLevel = finalLevel;
                         .OrderByDescending(a => a.FundRequest.CreatedAt)
                         .Select(a => new
                         {
-                            ApprovalId    = (int?)null,
+                             ApprovalId    = a.ApproverId == userId ? (int?)a.Id : null,
                             Status        = a.Status,
                             Comments      = (string?)null,
                             ActionedAt    = (DateTime?)null,
@@ -442,7 +442,8 @@ request.CurrentLevel = finalLevel;
                             WorkflowName  = a.FundRequest.Workflow != null ? a.FundRequest.Workflow.Name : null,
                             Amount        = a.FundRequest.Amount,             // ✅
                             Department    = a.FundRequest.Department != null ? a.FundRequest.Department.Name : null,
-                            CreatedAt     = a.FundRequest.CreatedAt
+                             CreatedAt     = a.FundRequest.CreatedAt,
+                            IsPendingForMe = a.ApproverId == userId
                         })
                         .ToListAsync();
 

@@ -41,7 +41,7 @@ const normalizeRow = (r) => {
     r.IApproved ??
     null;
    
-    const isMyPendingRaw =
+  const isMyPendingRaw =
     r.isPendingForMe ??
     r.IsPendingForMe ??
     r.isMyPending ??
@@ -94,7 +94,7 @@ const normalizeRow = (r) => {
     status: r.approvalStatus ?? r.ApprovalStatus ?? r.status ?? r.Status ?? "—",
     myAction: normalizeDecision(myActionRaw),
     isApprovedByMe: isTrueLike(isApprovedByMeRaw),
-     isMyPending: isTrueLike(isMyPendingRaw),
+    isMyPending: isTrueLike(isMyPendingRaw),
   };
 };
 
@@ -281,23 +281,21 @@ const [snackbar, setSnackbar] = useState({ open: false, message: "" });
   const fetchTrail = useCallback(async (fundRequestId) => getApprovalTrail(fundRequestId), []);
 
   const navigateToEdit = useCallback(
-   (row) => {
+  (row) => {
       const fundRequestId = row.fundRequestId ?? row.ref;
       const approvalId = row.approvalId ?? row.id;
       const qs = new URLSearchParams({ tab, ...(approvalId ? { approvalId: String(approvalId) } : {}) });
 
-      if (tab === "sentback") {
-        const isApproverSentBack = row.myAction === "sentback" || row.isMyPending === true;
-        if (isApproverSentBack) {
-          qs.set("role", "approver");
-        }
-         }
+      if (tab === "sentback" && row.isMyPending === true) {
+        qs.set("role", "approver");
+        navigate(`/approvals/${fundRequestId}/edit?${qs.toString()}`);
+        return;
+      }
 
       if (tab === "initiated" || tab === "sentback" || tab === "assigned") {
         navigate(`/resubmit/${fundRequestId}?${qs.toString()}`);
       } else {
         navigate(`/approvals/${fundRequestId}/edit?${qs.toString()}`);
-      
       }
     },
     [navigate, tab]
