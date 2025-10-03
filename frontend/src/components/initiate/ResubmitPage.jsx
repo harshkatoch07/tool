@@ -112,7 +112,7 @@ export default function ResubmitPage() {
       .then((t) => alive && setTrail(t))
       .catch(() => alive && setTrail(null));
     return () => { alive = false; };
-  }, [approvalId]);
+  }, [approvalId, id]);
 
   useEffect(() => {
     setApproverFeedback({ open: false, message: "", action: null, result: null });
