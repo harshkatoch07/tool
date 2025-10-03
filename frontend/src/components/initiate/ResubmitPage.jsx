@@ -88,7 +88,7 @@ const adaptSnapshot = (snapshot, attachments = []) => {
   return result;
 };
 
-const ALLOWED_TABS = ["initiated", "sentback", "assigned", "approved"];
+const ALLOWED_TABS = ["initiated", "sentback", "assigned", "approved","rejected"];
 
 export default function ResubmitPage() {
   const { id } = useParams();
@@ -334,10 +334,12 @@ export default function ResubmitPage() {
     setApproverFeedback((prev) => ({ ...prev, open: false }));
   };
 
-  const isReadOnlyTab = effectiveTab === "approved";
+  const isReadOnlyTab = effectiveTab === "approved" || effectiveTab === "rejected";
   const allowAttachmentEdit = !(isApproverView || isReadOnlyTab);
   const showButtonsConfig = isApproverView
     ? { approve: true, sentBack: true, reject: true, approveWithModification: true }
+    : isReadOnlyTab
+    ? { update: false, cancel: false, share: true }
     : undefined;
   const resolvedFundRequestId = useMemo(() => {
     const fallbackId = fundRequestId ?? id ?? undefined;
