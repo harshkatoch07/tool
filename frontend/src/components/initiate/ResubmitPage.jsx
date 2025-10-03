@@ -91,6 +91,7 @@ export default function ResubmitPage() {
   const navigate = useNavigate();
   const [search] = useSearchParams();
   const approvalId = search.get("approvalId");
+  const role = (search.get("role") || "").toLowerCase();
 
   const [trail, setTrail] = useState(null);
   const [openPath, setOpenPath] = useState(false);
@@ -167,8 +168,8 @@ const snapshotPromise = http.get(`/approvals/${approvalId}/form-snapshot`, {    
    }, [approvalId]);
 
   const viewKey = useMemo(
-    () => `${approvalId || ""}:${effectiveTab}:${formData ? "ready" : "loading"}`,
-    [approvalId, effectiveTab, formData]
+    () => `${approvalId || ""}:${effectiveTab}:${role}:${formData ? "ready" : "loading"}`,
+    [approvalId, effectiveTab, role, formData]
   );
   const handleApproverDone = ({ action, result } = {}) => {
     const key = String(action || "").toLowerCase();
@@ -186,10 +187,10 @@ const snapshotPromise = http.get(`/approvals/${approvalId}/form-snapshot`, {    
     if (reason === "clickaway") return;
     setApproverFeedback((prev) => ({ ...prev, open: false }));
   };
-const isApproverTab = effectiveTab === "assigned";
+const isApproverView = effectiveTab === "assigned" || (effectiveTab === "sentback" && role === "approver");
   const isReadOnlyTab = effectiveTab === "approved";
-  const allowAttachmentEdit = !(isApproverTab || isReadOnlyTab);
-  const showButtonsConfig = isApproverTab
+  const allowAttachmentEdit = !(isApproverView || isReadOnlyTab);
+  const showButtonsConfig = isApproverView
     ? { approve: true, sentBack: true, reject: true, approveWithModification: true }
     : undefined;
  
@@ -218,9 +219,9 @@ const isApproverTab = effectiveTab === "assigned";
       <React.Fragment key={viewKey}>
         <InitiateForm
           key={viewKey}
-          disabled={isApproverTab || isReadOnlyTab}
+          disabled={isApproverView || isReadOnlyTab}
           hideActions={false}
-          mode={isApproverTab ? "approver" : "initiator"}
+          mode={isApproverView ? "approver" : "initiator"}
           showButtons={showButtonsConfig}
           tabKey={effectiveTab}
           requestId={approvalId}
@@ -231,7 +232,7 @@ const isApproverTab = effectiveTab === "assigned";
           onUpdate={() => navigate(`/approvals?tab=${effectiveTab}`)}
           showPathButton
           onOpenPath={() => setOpenPath(true)}
-          onApproverDone={isApproverTab ? handleApproverDone : undefined}
+          onApproverDone={isApproverView ? handleApproverDone : undefined}
         />
       </React.Fragment>
 

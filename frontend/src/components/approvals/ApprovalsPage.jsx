@@ -40,6 +40,21 @@ const normalizeRow = (r) => {
     r.iApproved ??
     r.IApproved ??
     null;
+   
+    const isMyPendingRaw =
+    r.isPendingForMe ??
+    r.IsPendingForMe ??
+    r.isMyPending ??
+    r.IsMyPending ??
+    r.isAssignedToMe ??
+    r.IsAssignedToMe ??
+    r.isForMe ??
+    r.IsForMe ??
+    r.isMyTask ??
+    r.IsMyTask ??
+    r.myPending ??
+    r.MyPending ??
+    null;
 
   const nestedFundRequestId = r?.fundRequest?.id ?? r?.FundRequest?.Id ?? null;
   const fundRequestId = r.fundRequestId ?? r.FundRequestId ?? nestedFundRequestId ?? null;
@@ -79,6 +94,7 @@ const normalizeRow = (r) => {
     status: r.approvalStatus ?? r.ApprovalStatus ?? r.status ?? r.Status ?? "—",
     myAction: normalizeDecision(myActionRaw),
     isApprovedByMe: isTrueLike(isApprovedByMeRaw),
+     isMyPending: isTrueLike(isMyPendingRaw),
   };
 };
 
@@ -265,17 +281,24 @@ const [snackbar, setSnackbar] = useState({ open: false, message: "" });
   const fetchTrail = useCallback(async (fundRequestId) => getApprovalTrail(fundRequestId), []);
 
   const navigateToEdit = useCallback(
-  (row) => {
-        const fundRequestId = row.fundRequestId ?? row.ref;
-        if (tab === "initiated" || tab === "sentback" || tab === "assigned") {
-          const approvalId = row.approvalId ?? row.id;
-          const qs = new URLSearchParams({ tab, ...(approvalId ? { approvalId: String(approvalId) } : {}) });
-          navigate(`/resubmit/${fundRequestId}?${qs.toString()}`);
-        } else {
-          const approvalId = row.approvalId ?? row.id;
-          const qs = new URLSearchParams({ tab, ...(approvalId ? { approvalId: String(approvalId) } : {}) });
-          navigate(`/approvals/${fundRequestId}/edit?${qs.toString()}`);
+   (row) => {
+      const fundRequestId = row.fundRequestId ?? row.ref;
+      const approvalId = row.approvalId ?? row.id;
+      const qs = new URLSearchParams({ tab, ...(approvalId ? { approvalId: String(approvalId) } : {}) });
+
+      if (tab === "sentback") {
+        const isApproverSentBack = row.myAction === "sentback" || row.isMyPending === true;
+        if (isApproverSentBack) {
+          qs.set("role", "approver");
         }
+         }
+
+      if (tab === "initiated" || tab === "sentback" || tab === "assigned") {
+        navigate(`/resubmit/${fundRequestId}?${qs.toString()}`);
+      } else {
+        navigate(`/approvals/${fundRequestId}/edit?${qs.toString()}`);
+      
+      }
     },
     [navigate, tab]
   );
