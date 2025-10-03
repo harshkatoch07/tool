@@ -269,6 +269,7 @@ request.CurrentLevel = finalLevel;
             var approval = await _db.Approvals
                 .Include(a => a.FundRequest).ThenInclude(fr => fr.Workflow)
                 .Include(a => a.FundRequest).ThenInclude(fr => fr.Department)
+                .Include(a => a.FundRequest).ThenInclude(fr => fr.Initiator)
                 .FirstOrDefaultAsync(a => a.Id == id && a.ApproverId == userId);
 
             if (approval == null)
@@ -327,7 +328,10 @@ request.CurrentLevel = finalLevel;
                             WorkflowName = a.FundRequest.Workflow != null ? a.FundRequest.Workflow.Name : null,
                             Amount       = a.FundRequest.Amount,   // ✅
                             Department   = a.FundRequest.Department != null ? a.FundRequest.Department.Name : null,
-                            CreatedAt    = a.FundRequest.CreatedAt
+                            CreatedAt    = a.FundRequest.CreatedAt,
+                            InitiatorName = a.FundRequest.Initiator != null ? a.FundRequest.Initiator.FullName : null,
+                            NeededBy      = a.FundRequest.NeededBy,
+                            ApprovalNeededByDate = a.FundRequest.NeededBy
                         })
                         .ToListAsync();
 

@@ -91,8 +91,14 @@ const normalize = (r) => ({
   status: r.Status ?? r.status ?? r.approvalStatus ?? "—",
   createdAt: r.CreatedAt ?? r.createdAt ?? r.initiatedDate ?? null,
   initiatorName: r.InitiatorName ?? r.initiatedBy ?? r.initiator ?? "—",
-  lastActionAt: r.LastActionAt ?? r.lastActionAt ?? r.lastActionDate ?? null,
-  neededBy: r.NeededBy ?? r.approvalNeededBy ?? r.ApprovalNeededByDate ?? null,
+lastActionAt:
+    r.LastActionAt ??
+    r.lastActionAt ??
+    r.lastActionDate ??
+    r.ActionedAt ??
+    r.actionedAt ??
+    null,
+    neededBy: r.NeededBy ?? r.approvalNeededBy ?? r.ApprovalNeededByDate ?? null,
 });
 
 export default function SharedPage() {
