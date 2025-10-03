@@ -1,4 +1,4 @@
-// src/components/dashboard/dashboardColumns.js
+// src/components/dashboard/dashboardColumns.jsx
 import React from "react";
 import { Chip, IconButton, Tooltip, Link as MUILink } from "@mui/material";
 import { Link as RouterLink } from "react-router-dom";
@@ -6,12 +6,13 @@ import ApprovalTrailIcon from "../../icons/ApprovalTrailIcon";
 
 /**
  * Columns:
- * - Initiated  → link to /initiate?resubmit={FundRequestId}&source=dashboard
- * - Assigned   → link to /approval/{ApprovalId}?source=dashboard
+ * - Initiated  → /resubmit/{FundRequestId}?tab=initiated&source=dashboard[&approvalId=...]
+ * - Assigned   → /approval/{ApprovalId}?source=dashboard
+ * Strict ids only: no fallback to r.id.
  * Safe: guards missing ids, stops row propagation, no full-page reload.
  */
 export function buildDashboardColumns({
-  mode,          // "initiated" | "assigned"  (required)
+  mode, // "initiated" | "assigned" (required)
   fmtDate,
   showStatus,
   statusChip,
@@ -26,16 +27,25 @@ export function buildDashboardColumns({
     !v ? "—" : typeof fmtDate === "function" ? fmtDate(v) : new Date(v).toLocaleString();
 
   const renderApprovalLink = (r) => {
-    const frId = r.fundRequestId ?? r.id ?? null;
-    const apId = r.approvalId ?? r.id ?? r.fundRequestId ?? null;
+    // Strict identifiers. Do not fall back to r.id because the grid normalizes it per mode.
+    const frId = r.fundRequestId ?? null;
+    const apId = r.approvalId ?? null;
 
-    const to =
-      mode === "initiated"
-        ? frId ? `/initiate?resubmit=${encodeURIComponent(frId)}&source=dashboard` : null
-        : apId ? `/approval/${encodeURIComponent(apId)}?source=dashboard` : null;
+    let to = null;
+
+    if (mode === "initiated") {
+      if (frId) {
+        const params = new URLSearchParams({ tab: "initiated", source: "dashboard" });
+        if (apId) params.set("approvalId", apId); // optional context if present
+        to = `/resubmit/${encodeURIComponent(frId)}?${params.toString()}`;
+      }
+    } else {
+      if (apId) {
+        to = `/approval/${encodeURIComponent(apId)}?source=dashboard`;
+      }
+    }
 
     const label = r.requestTitle ?? r.title ?? "—";
-
     if (!to) return <span style={{ fontWeight: 700 }}>{label}</span>;
 
     return (

@@ -86,6 +86,8 @@ export default function ResubmitPage() {
 
   // Always show attachments. Allow editing only when not assigned/approved.
   const allowAttachmentEdit = !(effectiveTab === "assigned" || effectiveTab === "approved");
+   const isApproverTab = effectiveTab === "assigned";
+  const isReadOnlyTab = effectiveTab === "approved";
 
   return (
     <Box sx={{ width: "100%", maxWidth: 1600, mx: "auto" }}>
@@ -94,13 +96,13 @@ export default function ResubmitPage() {
       <React.Fragment key={viewKey}>
         <InitiateForm
           key={viewKey}
-          disabled={effectiveTab === "assigned" || effectiveTab === "approved"}
-          hideActions={effectiveTab !== "assigned"}
-          mode={effectiveTab === "assigned" ? "approver" : "initiator"}
+         disabled={isApproverTab || isReadOnlyTab}
+          hideActions={isReadOnlyTab}
+          mode={isApproverTab ? "approver" : "initiator"}
           showButtons={
-            effectiveTab === "assigned"
+           isApproverTab
               ? { approve: true, sentBack: true, reject: true, approveWithModification: true }
-              : {}
+              : undefined
           }
           tabKey={effectiveTab}
           requestId={approvalId}
