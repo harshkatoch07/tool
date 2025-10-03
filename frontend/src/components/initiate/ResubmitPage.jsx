@@ -1,4 +1,3 @@
-// src/components/initiate/ResubmitPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Box, CircularProgress, Snackbar, Alert } from "@mui/material";
@@ -25,7 +24,6 @@ const STATIC_SNAPSHOT_KEYS = new Set([
 
 const adaptSnapshot = (snapshot, attachments = []) => {
   const rows = Array.isArray(snapshot?.fields) ? snapshot.fields : [];
-
   const result = {
     requestTitle: "",
     description: "",
@@ -33,20 +31,30 @@ const adaptSnapshot = (snapshot, attachments = []) => {
     approvalBy: "",
     fields: [],
     attachments,
+    fundRequestId:
+      snapshot?.fundRequestId ??
+      snapshot?.requestId ??
+      snapshot?.RequestId ??
+      snapshot?.id ??
+      snapshot?.Id ??
+      null,
   };
 
   const normalizeKey = (key = "") => key.toString().trim();
-  const normalizedCode = (key = "") => normalizeKey(key).replace(/\s+/g, "").toLowerCase();
+  const toCode = (key = "") => normalizeKey(key).replace(/\s+/g, "").toLowerCase();
 
   const dynamic = [];
-
   rows.forEach((row) => {
     const rawKey = normalizeKey(row?.key ?? row?.label ?? "");
     if (!rawKey) return;
 
-    const code = normalizedCode(rawKey);
+    const code = toCode(rawKey);
     const value = row?.value ?? "";
 
+    if (code === "id" || code === "requestid") {
+      if (value !== undefined && value !== null && value !== "") result.fundRequestId = value;
+      return;
+    }
     if (code === "title" || code === "requesttitle") {
       result.requestTitle = value ?? "";
       return;
@@ -56,7 +64,7 @@ const adaptSnapshot = (snapshot, attachments = []) => {
       return;
     }
     if (code === "amount") {
-      result.amount = value === null || value === undefined ? "" : String(value);
+      result.amount = value == null ? "" : String(value);
       return;
     }
     if (["approvalby", "approvalbydate", "neededby", "neededbydate", "requiredby", "requiredbydate"].includes(code)) {
@@ -64,10 +72,8 @@ const adaptSnapshot = (snapshot, attachments = []) => {
         if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
           result.approvalBy = value;
         } else {
-          const parsed = new Date(value);
-          if (!Number.isNaN(parsed.getTime())) {
-            result.approvalBy = parsed.toISOString().slice(0, 10);
-          }
+          const d = new Date(value);
+          if (!Number.isNaN(d.getTime())) result.approvalBy = d.toISOString().slice(0, 10);
         }
       } else if (value instanceof Date && !Number.isNaN(value.getTime())) {
         result.approvalBy = value.toISOString().slice(0, 10);
@@ -75,9 +81,7 @@ const adaptSnapshot = (snapshot, attachments = []) => {
       return;
     }
 
-    if (!STATIC_SNAPSHOT_KEYS.has(code)) {
-      dynamic.push({ fieldName: rawKey, fieldValue: value });
-    }
+    if (!STATIC_SNAPSHOT_KEYS.has(code)) dynamic.push({ fieldName: rawKey, fieldValue: value });
   });
 
   result.fields = dynamic;
@@ -90,24 +94,37 @@ export default function ResubmitPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [search] = useSearchParams();
+
   const approvalId = search.get("approvalId");
   const role = (search.get("role") || "").toLowerCase();
 
   const [trail, setTrail] = useState(null);
   const [openPath, setOpenPath] = useState(false);
+
   const [formData, setFormData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  const [approverFeedback, setApproverFeedback] = useState({ open: false, message: "", action: null, result: null });
+
+  const [fundRequestId, setFundRequestId] = useState(id || null);
+  const [loadedViaFundRequest, setLoadedViaFundRequest] = useState(false);
+
+  const [approverFeedback, setApproverFeedback] = useState({
+    open: false,
+    message: "",
+    action: null,
+    result: null,
+  });
+
   const effectiveTab = useMemo(() => {
     const raw = (search.get("tab") || "assigned").toLowerCase();
     return ALLOWED_TABS.includes(raw) ? raw : "assigned";
   }, [search]);
- const isApproverView = useMemo(
+
+  const isApproverView = useMemo(
     () => effectiveTab === "assigned" || (effectiveTab === "sentback" && role === "approver"),
     [effectiveTab, role]
   );
+
   useEffect(() => {
     let alive = true;
     setTrail(null);
@@ -124,15 +141,20 @@ export default function ResubmitPage() {
 
   useEffect(() => {
     let alive = true;
+
     const fetchFormData = async () => {
       try {
         setLoading(true);
         setError(null);
-const shouldUseFundRequest =
+        setLoadedViaFundRequest(false);
+        setFundRequestId(id ?? null);
+
+        const shouldUseFundRequest =
           !approvalId ||
           effectiveTab === "initiated" ||
           effectiveTab === "rejected" ||
-          (effectiveTab === "sentback" && role !== "approver");        
+          (effectiveTab === "sentback" && role !== "approver");
+
         let attachments = [];
         if (id) {
           try {
@@ -152,23 +174,19 @@ const shouldUseFundRequest =
           }
         }
 
-         const normalizeFundRequest = (details) => {
+        const normalizeFundRequest = (details) => {
           if (!details) return { fields: [] };
 
           const rows = [];
           const pushRow = (key, label, value) => {
             if (value === undefined || value === null) return;
-            const normalizedValue =
+            const v =
               typeof value === "string" || typeof value === "number"
                 ? value
                 : value instanceof Date
                 ? value.toISOString()
                 : String(value);
-            rows.push({
-              key,
-              label: label || key,
-              value: normalizedValue,
-            });
+            rows.push({ key, label: label || key, value: v });
           };
 
           pushRow("Id", "Request ID", details.id ?? details.Id);
@@ -184,7 +202,6 @@ const shouldUseFundRequest =
           pushRow("DepartmentId", "Department ID", details.departmentId ?? details.DepartmentId);
           pushRow("DepartmentName", "Department Name", details.departmentName ?? details.DepartmentName);
           pushRow("ProjectName", "Project", details.projectName ?? details.ProjectName);
-
           const rawFields = details.fields ?? details.Fields;
           const dynamicFields = Array.isArray(rawFields) ? rawFields : [];
 
@@ -205,7 +222,9 @@ const shouldUseFundRequest =
             });
           });
 
-          return { fields: rows };
+          const fundRequestId = details?.id ?? details?.Id ?? null;
+
+          return { fields: rows, fundRequestId };
         };
 
         const tryFundRequest = async () => {
@@ -229,11 +248,26 @@ const shouldUseFundRequest =
         };
 
         const errors = [];
-        const assignResult = async (promiseFactory) => {
+        const assignResult = async (promiseFactory, { viaFundRequest } = {}) => {
           try {
             const data = await promiseFactory();
             if (alive) {
               setFormData(data);
+              
+               setLoadedViaFundRequest(!!viaFundRequest);
+              const extractedId =
+                data?.fundRequestId ??
+                data?.requestId ??
+                data?.RequestId ??
+                data?.id ??
+                data?.Id ??
+                null;
+
+              if (viaFundRequest) {
+                setFundRequestId(id ?? (extractedId != null ? String(extractedId) : null));
+              } else if (extractedId != null) {
+                setFundRequestId(String(extractedId));
+              }
               return true;
             }
           } catch (err) {
@@ -245,11 +279,11 @@ const shouldUseFundRequest =
         let loaded = false;
 
         if (shouldUseFundRequest) {
-          loaded = await assignResult(tryFundRequest);
+          loaded = await assignResult(tryFundRequest, { viaFundRequest: true });
         } else {
           loaded = await assignResult(tryApprovalsSnapshot);
           if (!loaded) {
-            loaded = await assignResult(tryFundRequest);
+            loaded = await assignResult(tryFundRequest, { viaFundRequest: true });
           }
         }
 
@@ -270,7 +304,7 @@ const shouldUseFundRequest =
         if (alive) setLoading(false);
       }
     };
-    @@ -83,133 +83,245 @@ const adaptSnapshot = (snapshot, attachments = []) => {
+  const adaptSnapshot = (snapshot, attachments = []) => {
   result.fields = dynamic;
   return result;
 };
@@ -289,7 +323,9 @@ export default function ResubmitPage() {
   const [formData, setFormData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+  const [fundRequestId, setFundRequestId] = useState(id || null);
+  const [loadedViaFundRequest, setLoadedViaFundRequest] = useState(false);
+
   const [approverFeedback, setApproverFeedback] = useState({ open: false, message: "", action: null, result: null });
   const effectiveTab = useMemo(() => {
     const raw = (search.get("tab") || "assigned").toLowerCase();
@@ -321,6 +357,9 @@ export default function ResubmitPage() {
       try {
         setLoading(true);
         setError(null);
+       setLoadedViaFundRequest(false);
+        setFundRequestId(id ?? null); 
+
 const snapshotPromise = http.get(`/approvals/${approvalId}/form-snapshot`, {          headers: authHeaders(),
         });
         
@@ -405,7 +444,9 @@ const snapshotPromise = http.get(`/approvals/${approvalId}/form-snapshot`, {    
             });
           });
 
-          return { fields: rows };
+          const fundRequestId = details?.id ?? details?.Id ?? null;
+
+          return { fields: rows, fundRequestId };
         };
 
         const tryFundRequest = async () => {
@@ -429,11 +470,25 @@ const snapshotPromise = http.get(`/approvals/${approvalId}/form-snapshot`, {    
         };
 
         const errors = [];
-        const assignResult = async (promiseFactory) => {
+        const assignResult = async (promiseFactory, { viaFundRequest } = {}) => {
           try {
             const data = await promiseFactory();
             if (alive) {
               setFormData(data);
+              setLoadedViaFundRequest(!!viaFundRequest);
+              const extractedId =
+                data?.fundRequestId ??
+                data?.requestId ??
+                data?.RequestId ??
+                data?.id ??
+                data?.Id ??
+                null;
+
+              if (viaFundRequest) {
+                setFundRequestId(id ?? (extractedId != null ? String(extractedId) : null));
+              } else if (extractedId != null) {
+                setFundRequestId(String(extractedId));
+              }
               return true;
             }
           } catch (err) {
@@ -445,11 +500,11 @@ const snapshotPromise = http.get(`/approvals/${approvalId}/form-snapshot`, {    
         let loaded = false;
 
         if (shouldUseFundRequest) {
-          loaded = await assignResult(tryFundRequest);
+          loaded = await assignResult(tryFundRequest, { viaFundRequest: true });
         } else {
           loaded = await assignResult(tryApprovalsSnapshot);
           if (!loaded) {
-            loaded = await assignResult(tryFundRequest);
+            loaded = await assignResult(tryFundRequest, { viaFundRequest: true });
           }
         }
 
@@ -504,6 +559,16 @@ const snapshotPromise = http.get(`/approvals/${approvalId}/form-snapshot`, {    
   const showButtonsConfig = isApproverView
     ? { approve: true, sentBack: true, reject: true, approveWithModification: true }
     : undefined;
+    const resolvedFundRequestId = useMemo(() => {
+    const fallbackId = fundRequestId ?? id ?? undefined;
+    if (!isApproverView) {
+      return id ?? fundRequestId ?? undefined;
+    }
+    if (loadedViaFundRequest) {
+      return id ?? fundRequestId ?? undefined;
+    }
+    return fallbackId;
+  }, [fundRequestId, id, isApproverView, loadedViaFundRequest]);
  
   if (loading && !error) {
     return (
@@ -535,7 +600,7 @@ const snapshotPromise = http.get(`/approvals/${approvalId}/form-snapshot`, {    
           mode={isApproverView ? "approver" : "initiator"}
           showButtons={showButtonsConfig}
           tabKey={effectiveTab}
-          requestId={approvalId}
+          requestId={isApproverView && !loadedViaFundRequest ? approvalId : resolvedFundRequestId}
           formData={formData}
           showAttachments={true}
           allowAttachmentEdit={allowAttachmentEdit}
@@ -560,4 +625,6 @@ const snapshotPromise = http.get(`/approvals/${approvalId}/form-snapshot`, {    
       </Snackbar>
     </Box>
   );
+
 }
+

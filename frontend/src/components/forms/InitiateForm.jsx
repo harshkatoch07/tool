@@ -789,7 +789,7 @@ function InitiateFormImpl({
           <ArrowBackIosNewIcon fontSize="small" />
         </IconButton>
         <Typography variant="h6" fontWeight={800} sx={{ color: "common.white" }}>
-          {mode === "approver" ? "Approve Request" : "Initiate Approval"}
+          {mode === "approver" ? "Approve Request" : " Approval"}
         </Typography>
       </Stack>
 
