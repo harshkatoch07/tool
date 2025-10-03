@@ -1,0 +1,11 @@
+D:\fund-approval-app\frontend\src\components\admin\ApprovalsOverview.jsx
+D:\fund-approval-app\frontend\src\components\admin\UserManagement.jsx
+D:\fund-approval-app\frontend\src\components\admin\workflow\WorkflowSteps.jsx
+D:\fund-approval-app\frontend\src\components\approvals\ApprovalsPage.jsx
+D:\fund-approval-app\frontend\src\components\dashboard\DashboardPage.jsx
+D:\fund-approval-app\frontend\src\components\delegates\DelegatesPage.jsx
+D:\fund-approval-app\frontend\src\components\FinalReceiverDetailsDialog.jsx
+D:\fund-approval-app\frontend\src\components\reports\ReportsPage.jsx
+D:\fund-approval-app\frontend\src\components\shared\SharedPage.jsx
+D:\fund-approval-app\frontend\src\ui\SmartDataTable.jsx
+D:\fund-approval-app\frontend\src\ui\theme.js
