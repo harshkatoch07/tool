@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Box,
   Paper,
@@ -14,6 +14,7 @@ import {
   Button,
   Skeleton,
   Tooltip,
+  ButtonBase,
 } from "@mui/material";
 import AddRounded from "@mui/icons-material/AddRounded";
 import { alpha } from "@mui/material/styles";
@@ -328,6 +329,13 @@ function DashboardPageInner() {
     ];
   }, [dataInitiated, dataAssigned]);
 
+   const handleKpiClick = useCallback(
+    (label) => {
+      if (loading) return;
+      setTab(label === "Assigned" ? 1 : 0);
+    },
+    [loading, setTab]
+  );
   // Department options
   const deptOptions = useMemo(() => {
     const src = tab === 0 ? dataInitiated : dataAssigned;
@@ -465,64 +473,98 @@ function DashboardPageInner() {
                 width: "100%",
               }}
             >
-              {(loading ? Array.from({ length: 5 }) : kpis).map((k, i) => (
-                <Paper
-                  key={i}
-                  elevation={0}
-                  sx={{
-                    minHeight: UI.kpi.minH,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1.5,
-                    p: 2,
-                    borderRadius: 0.3,
-                    bgcolor: "#fff",
-                    color: "#0B1324",
-                    border: `1px solid ${BRAND.cardBorder}`,
-                    transition: "transform 180ms ease, box-shadow 180ms ease",
-                    "&:hover": { transform: "translateY(-2px)", boxShadow: "0 10px 24px rgba(14,103,179,0.18)" },
-                    width: "100%",
-                  }}
-                >
-                  {loading ? (
-                    <>
+              {(loading ? Array.from({ length: 5 }) : kpis).map((k, i) => {
+                if (loading || !k) {
+                  return (
+                    <Paper
+                      key={i}
+                      elevation={0}
+                      sx={{
+                        minHeight: UI.kpi.minH,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1.5,
+                        p: 2,
+                        borderRadius: 0.3,
+                        bgcolor: "#fff",
+                        color: "#0B1324",
+                        border: `1px solid ${BRAND.cardBorder}`,
+                        transition: "transform 180ms ease, box-shadow 180ms ease",
+                        "&:hover": {
+                          transform: "translateY(-2px)",
+                          boxShadow: "0 10px 24px rgba(14,103,179,0.18)",
+                        },
+                        width: "100%",
+                        cursor: "default",
+                      }}
+                    >
                       <Skeleton variant="circular" width={UI.kpi.iconBox} height={UI.kpi.iconBox} />
                       <Box sx={{ flex: 1 }}>
                         <Skeleton width="40%" height={15} sx={{ mb: 1 }} />
                         <Skeleton width="60%" height={22} />
                       </Box>
-                    </>
-                  ) : (
-                    <>
-                      <Box
-                        sx={{
-                          width: UI.kpi.iconBox,
-                          height: UI.kpi.iconBox,
-                          borderRadius: "50%",
-                          display: "grid",
-                          placeItems: "center",
-                          background: `linear-gradient(135deg, ${alpha(k.accent, 0.14)}, ${alpha(k.accent, 0.22)})`,
-                          color: k.accent,
-                          // FIXED: removed stray backtick
-                          boxShadow:
-                            "inset 0 0 0 1px rgba(255,255,255,0.65), 0 6px 14px rgba(14,103,179,0.16)",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {k.icon}
-                      </Box>
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="caption" sx={{ color: alpha("#000", 0.65) }}>
-                          {k.label}
-                        </Typography>
-                        <Typography variant="h5" fontWeight={900} sx={{ lineHeight: 1.1 }}>
-                          {k.value}
-                        </Typography>
-                      </Box>
-                    </>
-                  )}
-                </Paper>
-              ))}
+                    </Paper>
+                  );
+                }
+
+                return (
+                  <Paper
+                    key={k.label}
+                    elevation={0}
+                    component={ButtonBase}
+                    onClick={() => handleKpiClick(k.label)}
+                    type="button"
+                    focusRipple
+                    role="button"
+                    aria-label={`View ${k.label} approvals`}
+                    sx={{
+                      minHeight: UI.kpi.minH,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.5,
+                      p: 2,
+                      borderRadius: 0.3,
+                      bgcolor: "#fff",
+                      color: "#0B1324",
+                      border: `1px solid ${BRAND.cardBorder}`,
+                      transition: "transform 180ms ease, box-shadow 180ms ease",
+                      "&:hover": {
+                        transform: "translateY(-2px)",
+                        boxShadow: "0 10px 24px rgba(14,103,179,0.18)",
+                      },
+                      width: "100%",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: UI.kpi.iconBox,
+                        height: UI.kpi.iconBox,
+                        borderRadius: "50%",
+                        display: "grid",
+                        placeItems: "center",
+                        background: `linear-gradient(135deg, ${alpha(k.accent, 0.14)}, ${alpha(k.accent, 0.22)})`,
+                        color: k.accent,
+                        // FIXED: removed stray backtick
+                        boxShadow:
+                          "inset 0 0 0 1px rgba(255,255,255,0.65), 0 6px 14px rgba(14,103,179,0.16)",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {k.icon}
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="caption" sx={{ color: alpha("#000", 0.65) }}>
+                        {k.label}
+                      </Typography>
+                      <Typography variant="h5" fontWeight={900} sx={{ lineHeight: 1.1 }}>
+                        {k.value}
+                      </Typography>
+                    </Box>
+                  </Paper>
+                );
+              })}
             </Box>
           </Box>
 
