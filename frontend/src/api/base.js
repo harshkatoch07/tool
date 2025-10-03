@@ -4,4 +4,7 @@
 const RAW = process.env.REACT_APP_API_BASE || "http://localhost:5292";
 
 // Always ensure trailing "/api"
-export const API_BASE = `${RAW.replace(/\/$/, "")}/api`;
+const NORMALIZED = RAW.replace(/\/+$/, "");
+export const API_BASE = NORMALIZED.endsWith("/api")
+  ? NORMALIZED
+  : `${NORMALIZED}/api`;
