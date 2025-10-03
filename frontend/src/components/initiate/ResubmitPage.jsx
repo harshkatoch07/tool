@@ -104,6 +104,202 @@ export default function ResubmitPage() {
     const raw = (search.get("tab") || "assigned").toLowerCase();
     return ALLOWED_TABS.includes(raw) ? raw : "assigned";
   }, [search]);
+ const isApproverView = useMemo(
+    () => effectiveTab === "assigned" || (effectiveTab === "sentback" && role === "approver"),
+    [effectiveTab, role]
+  );
+  useEffect(() => {
+    let alive = true;
+    setTrail(null);
+    if (!approvalId) return () => { alive = false; };
+    getApprovalTrail(approvalId)
+      .then((t) => alive && setTrail(t))
+      .catch(() => alive && setTrail(null));
+    return () => { alive = false; };
+  }, [approvalId, id]);
+
+  useEffect(() => {
+    setApproverFeedback({ open: false, message: "", action: null, result: null });
+  }, [approvalId, effectiveTab]);
+
+  useEffect(() => {
+    let alive = true;
+    const fetchFormData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+const shouldUseFundRequest =
+          !approvalId ||
+          effectiveTab === "initiated" ||
+          effectiveTab === "rejected" ||
+          (effectiveTab === "sentback" && role !== "approver");        
+        let attachments = [];
+        if (id) {
+          try {
+            const { data: rawAttachments } = await http.get(`/fundrequests/${id}/attachments`, {
+              headers: authHeaders(),
+            });
+            attachments = Array.isArray(rawAttachments)
+              ? rawAttachments.map((a) => ({
+                  id: a.Id ?? a.id,
+                  name: a.FileName ?? a.fileName ?? a.name,
+                  url: `/api/fundrequests/${id}/attachments/${a.Id ?? a.id}/download`,
+                  isExisting: true,
+                }))
+              : [];
+          } catch (attErr) {
+            console.warn("Failed to load attachments for resubmit view", attErr);
+          }
+        }
+
+         const normalizeFundRequest = (details) => {
+          if (!details) return { fields: [] };
+
+          const rows = [];
+          const pushRow = (key, label, value) => {
+            if (value === undefined || value === null) return;
+            const normalizedValue =
+              typeof value === "string" || typeof value === "number"
+                ? value
+                : value instanceof Date
+                ? value.toISOString()
+                : String(value);
+            rows.push({
+              key,
+              label: label || key,
+              value: normalizedValue,
+            });
+          };
+
+          pushRow("Id", "Request ID", details.id ?? details.Id);
+          pushRow("RequestId", "Request ID", details.id ?? details.Id);
+          pushRow("RequestTitle", "Title", details.requestTitle ?? details.RequestTitle);
+          pushRow("Description", "Description", details.description ?? details.Description);
+          pushRow("Amount", "Amount", details.amount ?? details.Amount);
+          pushRow("Status", "Status", details.status ?? details.Status);
+          pushRow("CurrentLevel", "Current Level", details.currentLevel ?? details.CurrentLevel);
+          pushRow("CreatedAt", "Created", details.createdAt ?? details.CreatedAt);
+          pushRow("WorkflowId", "Workflow ID", details.workflowId ?? details.WorkflowId);
+          pushRow("WorkflowName", "Workflow Name", details.workflowName ?? details.WorkflowName);
+          pushRow("DepartmentId", "Department ID", details.departmentId ?? details.DepartmentId);
+          pushRow("DepartmentName", "Department Name", details.departmentName ?? details.DepartmentName);
+          pushRow("ProjectName", "Project", details.projectName ?? details.ProjectName);
+
+          const rawFields = details.fields ?? details.Fields;
+          const dynamicFields = Array.isArray(rawFields) ? rawFields : [];
+
+          dynamicFields.forEach((field) => {
+            const key = field?.fieldName ?? field?.FieldName;
+            if (!key) return;
+            const rawValue = field?.fieldValue ?? field?.FieldValue ?? "";
+            const normalizedValue =
+              typeof rawValue === "string" || typeof rawValue === "number"
+                ? rawValue
+                : rawValue instanceof Date
+                ? rawValue.toISOString()
+                : String(rawValue);
+            rows.push({
+              key,
+              label: key,
+              value: normalizedValue,
+            });
+          });
+
+          return { fields: rows };
+        };
+
+        const tryFundRequest = async () => {
+          if (!id) {
+            throw new Error("Missing request id");
+          }
+          const { data } = await http.get(`/fundrequests/${id}`, {
+            headers: authHeaders(),
+          });
+          return adaptSnapshot(normalizeFundRequest(data), attachments);
+        };
+
+        const tryApprovalsSnapshot = async () => {
+          if (!approvalId) {
+            throw new Error("Missing approval id");
+          }
+          const resp = await http.get(`/approvals/${approvalId}/form-snapshot`, {
+            headers: authHeaders(),
+          });
+          return adaptSnapshot(resp.data, attachments);
+        };
+
+        const errors = [];
+        const assignResult = async (promiseFactory) => {
+          try {
+            const data = await promiseFactory();
+            if (alive) {
+              setFormData(data);
+              return true;
+            }
+          } catch (err) {
+            errors.push(err);
+          }
+          return false;
+        };
+
+        let loaded = false;
+
+        if (shouldUseFundRequest) {
+          loaded = await assignResult(tryFundRequest);
+        } else {
+          loaded = await assignResult(tryApprovalsSnapshot);
+          if (!loaded) {
+            loaded = await assignResult(tryFundRequest);
+          }
+        }
+
+        if (!loaded && alive) {
+          if (errors.length) {
+            console.warn("Failed to load resubmit data", errors);
+          }
+          setFormData(null);
+          setError("We couldn't load the request details. Please try again later.");
+        }
+      } catch (e) {
+        if (alive) {
+          console.error("Unexpected error loading resubmit data", e);
+          setError("We couldn't load the request details. Please try again later.");
+          setFormData(null);
+        }
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+    @@ -83,133 +83,245 @@ const adaptSnapshot = (snapshot, attachments = []) => {
+  result.fields = dynamic;
+  return result;
+};
+
+const ALLOWED_TABS = ["initiated", "sentback", "assigned", "approved"];
+
+export default function ResubmitPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [search] = useSearchParams();
+  const approvalId = search.get("approvalId");
+  const role = (search.get("role") || "").toLowerCase();
+
+  const [trail, setTrail] = useState(null);
+  const [openPath, setOpenPath] = useState(false);
+  const [formData, setFormData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  const [approverFeedback, setApproverFeedback] = useState({ open: false, message: "", action: null, result: null });
+  const effectiveTab = useMemo(() => {
+    const raw = (search.get("tab") || "assigned").toLowerCase();
+    return ALLOWED_TABS.includes(raw) ? raw : "assigned";
+  }, [search]);
+
+  const isApproverView = useMemo(
+    () => effectiveTab === "assigned" || (effectiveTab === "sentback" && role === "approver"),
+    [effectiveTab, role]
+  );
 
   useEffect(() => {
     let alive = true;
@@ -128,6 +324,12 @@ export default function ResubmitPage() {
 const snapshotPromise = http.get(`/approvals/${approvalId}/form-snapshot`, {          headers: authHeaders(),
         });
         
+        const shouldUseFundRequest =
+          !approvalId ||
+          effectiveTab === "initiated" ||
+          effectiveTab === "rejected" ||
+          (effectiveTab === "sentback" && role !== "approver");
+
         let attachments = [];
         if (id) {
           try {
@@ -150,22 +352,131 @@ const snapshotPromise = http.get(`/approvals/${approvalId}/form-snapshot`, {    
         const resp = await snapshotPromise;
         const adapted = adaptSnapshot(resp.data, attachments);
         if (alive) setFormData(adapted);
+        const normalizeFundRequest = (details) => {
+          if (!details) return { fields: [] };
+
+          const rows = [];
+          const pushRow = (key, label, value) => {
+            if (value === undefined || value === null) return;
+            const normalizedValue =
+              typeof value === "string" || typeof value === "number"
+                ? value
+                : value instanceof Date
+                ? value.toISOString()
+                : String(value);
+            rows.push({
+              key,
+              label: label || key,
+              value: normalizedValue,
+            });
+          };
+
+          pushRow("Id", "Request ID", details.id ?? details.Id);
+          pushRow("RequestId", "Request ID", details.id ?? details.Id);
+          pushRow("RequestTitle", "Title", details.requestTitle ?? details.RequestTitle);
+          pushRow("Description", "Description", details.description ?? details.Description);
+          pushRow("Amount", "Amount", details.amount ?? details.Amount);
+          pushRow("Status", "Status", details.status ?? details.Status);
+          pushRow("CurrentLevel", "Current Level", details.currentLevel ?? details.CurrentLevel);
+          pushRow("CreatedAt", "Created", details.createdAt ?? details.CreatedAt);
+          pushRow("WorkflowId", "Workflow ID", details.workflowId ?? details.WorkflowId);
+          pushRow("WorkflowName", "Workflow Name", details.workflowName ?? details.WorkflowName);
+          pushRow("DepartmentId", "Department ID", details.departmentId ?? details.DepartmentId);
+          pushRow("DepartmentName", "Department Name", details.departmentName ?? details.DepartmentName);
+          pushRow("ProjectName", "Project", details.projectName ?? details.ProjectName);
+
+          const rawFields = details.fields ?? details.Fields;
+          const dynamicFields = Array.isArray(rawFields) ? rawFields : [];
+
+          dynamicFields.forEach((field) => {
+            const key = field?.fieldName ?? field?.FieldName;
+            if (!key) return;
+            const rawValue = field?.fieldValue ?? field?.FieldValue ?? "";
+            const normalizedValue =
+              typeof rawValue === "string" || typeof rawValue === "number"
+                ? rawValue
+                : rawValue instanceof Date
+                ? rawValue.toISOString()
+                : String(rawValue);
+            rows.push({
+              key,
+              label: key,
+              value: normalizedValue,
+            });
+          });
+
+          return { fields: rows };
+        };
+
+        const tryFundRequest = async () => {
+          if (!id) {
+            throw new Error("Missing request id");
+          }
+          const { data } = await http.get(`/fundrequests/${id}`, {
+            headers: authHeaders(),
+          });
+          return adaptSnapshot(normalizeFundRequest(data), attachments);
+        };
+
+        const tryApprovalsSnapshot = async () => {
+          if (!approvalId) {
+            throw new Error("Missing approval id");
+          }
+          const resp = await http.get(`/approvals/${approvalId}/form-snapshot`, {
+            headers: authHeaders(),
+          });
+          return adaptSnapshot(resp.data, attachments);
+        };
+
+        const errors = [];
+        const assignResult = async (promiseFactory) => {
+          try {
+            const data = await promiseFactory();
+            if (alive) {
+              setFormData(data);
+              return true;
+            }
+          } catch (err) {
+            errors.push(err);
+          }
+          return false;
+        };
+
+        let loaded = false;
+
+        if (shouldUseFundRequest) {
+          loaded = await assignResult(tryFundRequest);
+        } else {
+          loaded = await assignResult(tryApprovalsSnapshot);
+          if (!loaded) {
+            loaded = await assignResult(tryFundRequest);
+          }
+        }
+
+        if (!loaded && alive) {
+          if (errors.length) {
+            console.warn("Failed to load resubmit data", errors);
+          }
+          setFormData(null);
+          setError("We couldn't load the request details. Please try again later.");
+        }
       } catch (e) {
         if (alive) {
           setError(e?.response?.data || "Failed to load form data");
+          console.error("Unexpected error loading resubmit data", e);
+          setError("We couldn't load the request details. Please try again later.");
           setFormData(null);
         }
       } finally {
         if (alive) setLoading(false);
       }
     };
-    if (approvalId) fetchFormData();
-    else {
-      setLoading(false);
-      setFormData(null);
-    }
-    return () => { alive = false; };
-   }, [approvalId]);
+    
+    fetchFormData();
+    return () => {
+      alive = false;
+    };
+  }, [approvalId, effectiveTab, role, id]);
 
   const viewKey = useMemo(
     () => `${approvalId || ""}:${effectiveTab}:${role}:${formData ? "ready" : "loading"}`,
@@ -187,7 +498,7 @@ const snapshotPromise = http.get(`/approvals/${approvalId}/form-snapshot`, {    
     if (reason === "clickaway") return;
     setApproverFeedback((prev) => ({ ...prev, open: false }));
   };
-const isApproverView = effectiveTab === "assigned" || (effectiveTab === "sentback" && role === "approver");
+
   const isReadOnlyTab = effectiveTab === "approved";
   const allowAttachmentEdit = !(isApproverView || isReadOnlyTab);
   const showButtonsConfig = isApproverView
