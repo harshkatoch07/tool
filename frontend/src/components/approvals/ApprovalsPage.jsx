@@ -43,7 +43,8 @@ const normalizeRow = (r) => {
 
   const nestedFundRequestId = r?.fundRequest?.id ?? r?.FundRequest?.Id ?? null;
   const fundRequestId = r.fundRequestId ?? r.FundRequestId ?? nestedFundRequestId ?? null;
-  const approvalId = r.approvalId ?? r.ApprovalId ?? r.id ?? r.Id ?? null;
+ const approvalId =
+    r.approvalId ?? r.ApprovalId ?? (fundRequestId == null ? r.id ?? r.Id ?? null : null);
 
   return {
     ref: fundRequestId ?? r.requestRef ?? r.RequestRef ?? "—",
