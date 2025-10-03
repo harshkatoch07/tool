@@ -91,6 +91,7 @@ function App() {
           <Route path="/resubmit/:id" element={<ResubmitPage />} />
 
           <Route path="/fundrequest/:id" element={<ApprovalDetailsPage mode="fund" />} />
+          <Route path="/approval/:id" element={<ApprovalDetailsPage />} />
         </Route>
 
         {/* Fallback */}
