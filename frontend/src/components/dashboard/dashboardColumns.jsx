@@ -7,7 +7,7 @@ import ApprovalTrailIcon from "../../icons/ApprovalTrailIcon";
 /**
  * Columns:
  * - Initiated  → /resubmit/{FundRequestId}?tab=initiated&source=dashboard[&approvalId=...]
- * - Assigned   → /approval/{ApprovalId}?source=dashboard
+ * -  Assigned   → /resubmit/{FundRequestId}?tab=assigned&source=dashboard[&approvalId=...]
  * Strict ids only: no fallback to r.id.
  * Safe: guards missing ids, stops row propagation, no full-page reload.
  */
@@ -40,8 +40,10 @@ export function buildDashboardColumns({
         to = `/resubmit/${encodeURIComponent(frId)}?${params.toString()}`;
       }
     } else {
-      if (apId) {
-        to = `/approval/${encodeURIComponent(apId)}?source=dashboard`;
+      if (frId) {
+        const params = new URLSearchParams({ tab: "assigned", source: "dashboard" });
+        if (apId) params.set("approvalId", apId);
+        to = `/resubmit/${encodeURIComponent(frId)}?${params.toString()}`;
       }
     }
 
