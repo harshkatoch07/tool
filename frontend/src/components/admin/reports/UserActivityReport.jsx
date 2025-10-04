@@ -16,20 +16,58 @@ export default function UserActivityReport() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  const columns = useMemo(() => ([
-    { key: "RequestId", header: "Request ID", width: 110 },
-    { key: "WorkflowName", header: "Workflow" },
-    { key: "ProjectName", header: "Project" },
-    { key: "StepName", header: "Step" },
-    { key: "AssignedAtUtc", header: "Assigned (UTC)", render:v=>new Date(v).toLocaleString() },
-    { key: "FirstOpenedAtUtc", header: "First Open", render:v=>v?new Date(v).toLocaleString():"-" },
-    { key: "FirstAttachmentAtUtc", header: "First Attachment", render:v=>v?new Date(v).toLocaleString():"-" },
-    { key: "Decision", header: "Decision" },
-    { key: "DecisionAtUtc", header: "Decision At", render:v=>v?new Date(v).toLocaleString():"-" },
-    { key: "Minutes_AssignToDecision", header: "Min Assign→Decision" },
-    { key: "Minutes_OpenToDecision", header: "Min Open→Decision" },
-  ]),[]);
+   const columns = useMemo(() => {
+    const formatDate = (value) =>
+      value ? new Date(value).toLocaleString() : "—";
 
+    const formatMinutes = (seconds) =>
+      seconds == null ? "—" : Math.round(seconds / 60);
+
+    return [
+      { field: "FundRequestId", header: "Request ID", width: 110 },
+      { field: "RequestTitle", header: "Request Title" },
+      { field: "WorkflowName", header: "Workflow" },
+      { field: "ProjectName", header: "Project" },
+      { field: "DepartmentName", header: "Department" },
+      { field: "ApproverName", header: "Approver" },
+      {
+        field: "AssignedAt",
+        header: "Assigned (UTC)",
+        render: (row) => formatDate(row.AssignedAt),
+      },
+      {
+        field: "FirstOpenedAt",
+        header: "First Open",
+        render: (row) => formatDate(row.FirstOpenedAt),
+      },
+      {
+        field: "FirstOpenedLatencySecs",
+        header: "Min Assign→Open",
+        render: (row) => formatMinutes(row.FirstOpenedLatencySecs),
+      },
+      {
+        field: "ApprovedAt",
+        header: "Decision At",
+        render: (row) => formatDate(row.ApprovedAt),
+      },
+      {
+        field: "ApprovalLatencySecs",
+        header: "Min Assign→Decision",
+        render: (row) => formatMinutes(row.ApprovalLatencySecs),
+      },
+      { field: "Decision", header: "Decision" },
+      {
+        field: "AttachmentViewsCount",
+        header: "Attachment Views",
+        render: (row) => (row.AttachmentViewsCount ?? 0).toString(),
+      },
+      {
+        field: "AttachmentFirstViewedAt",
+        header: "First Attachment View",
+        render: (row) => formatDate(row.AttachmentFirstViewedAt),
+      },
+    ];
+  }, []);
   async function run() {
     setErr(""); setLoading(true);
     try {
@@ -38,14 +76,24 @@ export default function UserActivityReport() {
         fromUtc: toIsoUtcMidnight(new Date(from)),
         toUtc: toIsoUtcMidnight(new Date(to))
       });
-      setRows(data.Rows || data.rows || []);
-      setSummary({
-        total: data.TotalItems ?? 0,
-        avg: data.AvgMinutes_AssignToDecision ?? 0,
-        opened: data.OpenedCount ?? 0,
-        attached: data.AttachmentViewedCount ?? 0,
-        user: data.Username ?? username
-      });
+      if (Array.isArray(data)) {
+        setRows(data);
+        setSummary(null);
+      } else {
+         const nextRows = Array.isArray(data) ? data : data.Rows ?? data.rows ?? [];
+      setRows(nextRows);
+      if (Array.isArray(data)) {
+        setSummary(null);
+      } else {
+        setSummary({
+          total: data.TotalItems ?? nextRows.length,
+          avg: data.AvgMinutes_AssignToDecision ?? 0,
+          opened: data.OpenedCount ?? 0,
+          attached: data.AttachmentViewedCount ?? 0,
+          user: data.Username ?? username
+        });
+      }
+      }
     } catch (e) {
       setErr(e?.response?.data ?? e.message);
     } finally { setLoading(false); }
@@ -73,7 +121,18 @@ export default function UserActivityReport() {
       </Paper>
 
       <Paper sx={{ p: 1 }}>
-        <SmartDataTable rows={rows} columns={columns} rowKey="RequestId" loading={loading} dense stickyHeader virtualize />
+<SmartDataTable
+          rows={rows}
+          columns={columns}
+          rowKey="FundRequestId"
+          loading={loading}
+          dense
+          stickyHeader
+          virtualize
+          getRowId={(row) =>
+            row?.FundRequestId ?? row?.RequestId ?? row?.Id ?? row?.id ?? "row"
+          }
+        />
       </Paper>
     </Box>
   );

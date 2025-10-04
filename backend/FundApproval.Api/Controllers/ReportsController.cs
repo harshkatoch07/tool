@@ -6,7 +6,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using FundApproval.Api.Data;
-using FundApproval.Api.Models;
+using FundApproval.Api.DTOs.Reports;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -34,17 +34,29 @@ namespace FundApproval.Api.Controllers
             [FromQuery] int take = 200,
             CancellationToken ct = default)
         {
+            var normalizedUsername = username?.Trim();
+
             int? targetUserId = userId;
-            if (targetUserId is null && !string.IsNullOrWhiteSpace(username))
+            if (targetUserId is null && !string.IsNullOrWhiteSpace(normalizedUsername))
             {
                 var uname = username.Trim();
                 targetUserId = await _db.Users
-                    .Where(u => u.Username == uname || u.Email == uname)
+                    .Where(u => u.Username == normalizedUsername || u.Email == normalizedUsername)
                     .Select(u => (int?)u.Id)
                     .FirstOrDefaultAsync(ct);
             }
             if (targetUserId is null)
                 return BadRequest("Provide username or userId.");
+                var reportUsername = normalizedUsername;
+            if (string.IsNullOrEmpty(reportUsername))
+            {
+                reportUsername = await _db.Users
+                    .Where(u => u.Id == targetUserId)
+                    .Select(u => u.Username ?? u.Email ?? (string?)null)
+                    .FirstOrDefaultAsync(ct)
+                    ?? $"User#{targetUserId}";
+            }
+
 
             var fromFilter = fromUtc ?? from;
             var toFilter = toUtc ?? to;
@@ -71,14 +83,12 @@ namespace FundApproval.Api.Controllers
                 approvalsQuery = approvalsQuery.Where(a => (a.AssignedAt ?? a.ActionedAt) <= endUtc.Value);
 
            // just before the query
-var SqlSafeFloor = new DateTime(1753, 1, 1);
-
-// ...
-var approvals = await approvalsQuery
-    .OrderByDescending(a => (a.AssignedAt ?? a.ActionedAt ?? SqlSafeFloor))
-    .Take(Math.Clamp(take, 1, 2000))
-    .Select(a => new
-    {
+            var sqlSafeFloor = new DateTime(1753, 1, 1);
+            var approvals = await approvalsQuery
+                .OrderByDescending(a => (a.AssignedAt ?? a.ActionedAt ?? sqlSafeFloor))
+                .Take(Math.Clamp(take, 1, 2000))
+                .Select(a => new
+                {
         a.Id,
         a.Level,
         a.Status,
@@ -97,7 +107,19 @@ var approvals = await approvalsQuery
 
 
             if (approvals.Count == 0)
-                return Ok(Array.Empty<UserActivityRow>());
+               {
+                var emptyResult = new UserActivityReportDto
+                {
+                    Username = reportUsername,
+                    TotalItems = 0,
+                    AvgMinutes_AssignToDecision = 0,
+                    OpenedCount = 0,
+                    AttachmentViewedCount = 0,
+                    Rows = Array.Empty<UserActivityRow>()
+                };
+
+                return Ok(emptyResult);
+            }
 
             var approvalIds = approvals.Select(x => x.Id).ToList();
 
@@ -186,7 +208,23 @@ var approvals = await approvalsQuery
             .OrderByDescending(r => r.AssignedAt ?? r.FirstOpenedAt ?? r.ApprovedAt)
             .ToList();
 
-            return Ok(rows);
+            var avgAssignToDecisionMinutes = rows
+                .Where(r => r.ApprovalLatencySecs.HasValue)
+                .Select(r => r.ApprovalLatencySecs!.Value / 60.0)
+                .DefaultIfEmpty(0)
+                .Average();
+
+            var result = new UserActivityReportDto
+            {
+                Username = reportUsername,
+                TotalItems = rows.Count,
+                AvgMinutes_AssignToDecision = Math.Round(avgAssignToDecisionMinutes, 2),
+                OpenedCount = rows.Count(r => r.FirstOpenedAt.HasValue),
+                AttachmentViewedCount = rows.Sum(r => r.AttachmentViewsCount),
+                Rows = rows
+            };
+
+            return Ok(result);
         }
     }
 }
