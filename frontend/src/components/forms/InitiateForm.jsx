@@ -15,6 +15,7 @@ import { useTheme, alpha } from "@mui/material/styles";
 import ApproverActionBar from "../initiate/ApproverActionBar";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import { downloadAttachment } from "../../api/attachmentsApi";
+import { getAssignedWorkflows } from "../../api/workflowApi";
 
 // ---------------------------------------------
 // Minimal API client (fetch-based) + optional mocks
@@ -254,6 +255,17 @@ function InitiateFormImpl({
 
   // Compute derived values
   const approvalId = searchParams.get("approvalId") || undefined;
+  const departmentFilter = useMemo(() => {
+    const raw =
+      searchParams.get("departmentId") ??
+      searchParams.get("department") ??
+      searchParams.get("dept");
+    if (typeof raw !== "string") return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    if (trimmed.toLowerCase() === "all") return null;
+    return trimmed;
+  }, [searchParams]);
   const id = requestId ?? idFromRoute;
   const isEdit = !!id;
 
@@ -359,7 +371,11 @@ function InitiateFormImpl({
     const loadWorkflows = async () => {
       setLoadError(null);
       try {
-        const { data } = await api.get("/workflow", { signal: controller.signal });
+        const data = await getAssignedWorkflows({
+          initiatorOnly: mode !== "approver",
+          departmentId: departmentFilter ?? undefined,
+          signal: controller.signal,
+        });
         if (!isActive) return;
         const list = Array.isArray(data) ? data : [];
         setWorkflows(list);
@@ -368,6 +384,14 @@ function InitiateFormImpl({
         }
       } catch (err) {
         if (!isActive || err?.name === "AbortError") return;
+        if (USE_MOCKS) {
+          const list = Array.isArray(mockDB.workflows) ? mockDB.workflows : [];
+          setWorkflows(list);
+          if (!isEdit && list.length === 1) {
+            setSelectedProj((prev) => prev || String(list[0]?.workflowId ?? list[0]?.id ?? ""));
+          }
+          return;
+        }
         setWorkflows([]);
         setLoadError(err?.message || "Unable to load workflows");
       }
@@ -379,7 +403,7 @@ function InitiateFormImpl({
       isActive = false;
       controller.abort();
     };
-  }, [isEdit]);
+  }, [isEdit, mode, departmentFilter]);
   
   // Load assigned projects
   useEffect(() => {

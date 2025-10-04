@@ -24,14 +24,14 @@ export async function getAllWorkflowsAdmin() {
 
 // Workflows assigned/available to current user
 // GET /api/workflow
-export async function getAssignedWorkflows({ departmentId, initiatorOnly } = {}) {
+export async function getAssignedWorkflows({ departmentId, initiatorOnly, signal } = {}) {
   const params = new URLSearchParams();
   if (departmentId != null) params.set("departmentId", String(departmentId));
   if (initiatorOnly != null) params.set("initiatorOnly", String(initiatorOnly));
   const q = params.toString();
   const url = q ? `${API}?${q}` : `${API}`;
 
-  const res = await fetch(url, { headers: authHeaders() });
+  const res = await fetch(url, { headers: authHeaders(), signal });
   if (!res.ok) throw new Error(`getAssignedWorkflows failed: ${res.status}`);
   return res.json();
 }
