@@ -61,12 +61,7 @@ namespace FundApproval.Api.Data
                 entity.Property(e => e.DesignationName).HasColumnName("DesignationName");
                 // entity.Property(e => e.IsActive).HasColumnName("IsActive"); // enable if you have this column
             });
-            modelBuilder.Entity<Attachment>(e =>
-    {
-        e.ToTable("Attachments");              // dbo.Attachments
-        e.Property(p => p.SizeBytes).HasColumnName("FileSize");
-        e.Property(p => p.FilePath).HasColumnName("StoragePath");
-    });
+            
             // =============================
             // DEPARTMENT
             // =============================
@@ -329,7 +324,9 @@ namespace FundApproval.Api.Data
                 entity.Property(a => a.Comments).HasColumnName("Comments");
                 entity.Property(a => a.CreatedAt).HasColumnName("Timestamp"); // DB column is Timestamp in some schemas
                 entity.Ignore(a => a.Ip); // DB does not have Ip
-            }); modelBuilder.Entity<Attachment>().ToTable("Attachments");
+            });
+
+            modelBuilder.Entity<Attachment>().ToTable("Attachments");
             modelBuilder.Entity<Attachment>(entity =>
             {
                 entity.HasKey(a => a.Id);
@@ -339,7 +336,7 @@ namespace FundApproval.Api.Data
                 entity.Property(a => a.ContentType).HasColumnName("ContentType").HasMaxLength(200);
                 entity.Property(a => a.FileSize).HasColumnName("FileSize");
                 entity.Property(a => a.StoragePath).HasColumnName("StoragePath").HasMaxLength(1024);
-                entity.Property(a => a.LegacyFilePath).HasColumnName("FilePath").HasMaxLength(1024);
+
                 entity.Property(a => a.UploadedBy).HasColumnName("UploadedBy");
                 entity.Property(a => a.UploadedAt).HasColumnName("UploadedAt");
                 entity.Property(a => a.Sha256).HasColumnName("Sha256").HasMaxLength(64);

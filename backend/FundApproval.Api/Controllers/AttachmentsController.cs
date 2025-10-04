@@ -74,15 +74,45 @@ namespace FundApproval.Api.Controllers
                 return Path.Combine(_env.ContentRootPath, trimmedPrimary);
             }
 
-            var legacy = NormalizeCandidate(attachment.LegacyFilePath);
-            if (string.IsNullOrEmpty(legacy))
-                return null;
+            return ResolveLegacyLocation(attachment);
+        }
 
-            if (Path.IsPathRooted(legacy))
-                return legacy;
+           private string? ResolveLegacyLocation(Attachment attachment)
+        {
+            try
+            {
+                var fileName = Path.GetFileName(attachment.FileName);
+                if (string.IsNullOrWhiteSpace(fileName))
+                    return null;
 
-            var trimmedLegacy = legacy.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            return Path.Combine(_env.ContentRootPath, trimmedLegacy);
+                var legacyDirectory = Path.Combine(
+                    _env.ContentRootPath,
+                    "uploads",
+                    "fundrequests",
+                    attachment.FundRequestId.ToString());
+
+                if (!Directory.Exists(legacyDirectory))
+                    return null;
+
+                var exactPath = Path.Combine(legacyDirectory, fileName);
+                if (System.IO.File.Exists(exactPath))
+                    return exactPath;
+
+                foreach (var candidate in Directory.EnumerateFiles(legacyDirectory))
+                {
+                    var candidateName = Path.GetFileName(candidate);
+                    if (string.Equals(candidateName, fileName, StringComparison.OrdinalIgnoreCase))
+                        return candidate;
+
+                    if (candidateName.EndsWith("_" + fileName, StringComparison.OrdinalIgnoreCase))
+                        return candidate;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to resolve legacy attachment path for attachment {AttachmentId}", attachment.Id);
+            }
+            return null;
         }
 
         private void TryDeleteFile(string? path)
@@ -270,7 +300,7 @@ public async Task<ActionResult<IEnumerable<object>>> List(int id, CancellationTo
                 ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
                 FileSize = file.Length,
                 StoragePath = relativePath,
-                LegacyFilePath = relativePath,
+                
                 UploadedBy = me,
                 UploadedAt = DateTime.UtcNow
             };
@@ -330,7 +360,7 @@ public async Task<ActionResult<IEnumerable<object>>> List(int id, CancellationTo
             att.ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
             att.FileSize = file.Length;
             att.StoragePath = relativePath;
-            att.LegacyFilePath = relativePath;
+            
             att.UploadedBy = me;
             att.UploadedAt = DateTime.UtcNow;
 
