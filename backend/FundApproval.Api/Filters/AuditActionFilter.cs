@@ -51,8 +51,7 @@ namespace FundApproval.Api.Filters
 
             try
             {
-                _db.AuditLogs.Add(log);
-                await _db.SaveChangesAsync();
+                _await _db.InsertAuditLogAsync(log, context.HttpContext.RequestAborted);
             }
             catch (Exception ex)
             {

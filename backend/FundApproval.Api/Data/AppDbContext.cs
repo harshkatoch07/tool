@@ -1,3 +1,5 @@
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using FundApproval.Api.Models;
 using FundApproval.Api.DTOs.Reports;
@@ -26,14 +28,14 @@ namespace FundApproval.Api.Data
         public DbSet<EmailOutbox> EmailOutbox => Set<EmailOutbox>();
         public DbSet<FinalReceiverAssignment> FinalReceiverAssignments { get; set; }
         public DbSet<Delegation> Delegations => Set<Delegation>();
-       public DbSet<ReportsUserActivityRow> UserActivityRows => Set<ReportsUserActivityRow>();
+        public DbSet<ReportsUserActivityRow> UserActivityRows => Set<ReportsUserActivityRow>();
 
 
         // NEW: event ledger for per-user request activity
-            public DbSet<RequestAuditEvent> RequestAuditEvents => Set<RequestAuditEvent>();
+        public DbSet<RequestAuditEvent> RequestAuditEvents => Set<RequestAuditEvent>();
 
         // NEW: keyless DTO to read results from sp_Report_UserActivity
-        
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -306,7 +308,7 @@ namespace FundApproval.Api.Data
             // =============================
             // ATTACHMENTS
             // =============================
-            
+
             // =============================
             // AUDIT LOGS
             // =============================
@@ -323,7 +325,7 @@ namespace FundApproval.Api.Data
                 entity.Property(a => a.Comments).HasColumnName("Comments");
                 entity.Property(a => a.CreatedAt).HasColumnName("Timestamp"); // DB column is Timestamp in some schemas
                 entity.Ignore(a => a.Ip); // DB does not have Ip
-            });modelBuilder.Entity<Attachment>().ToTable("Attachments");
+            }); modelBuilder.Entity<Attachment>().ToTable("Attachments");
             modelBuilder.Entity<Attachment>(entity =>
             {
                 entity.HasKey(a => a.Id);
@@ -414,32 +416,41 @@ namespace FundApproval.Api.Data
                 e.HasIndex(x => new { x.EventType, x.OccurredAtUtc });
             });
 
-             // =============================
-                  // NEW: keyless mapping for SP result
-                  // =============================
-                 // Keyless mapping for API-projected report rows
-// Keyless mapping for API-projected report rows
-modelBuilder.Entity<ReportsUserActivityRow>(e =>
-{
-    e.HasNoKey();
-    e.ToView(null);
-    e.Property(p => p.FundRequestId).HasColumnName("FundRequestId");
-    e.Property(p => p.RequestTitle).HasColumnName("RequestTitle");
-    e.Property(p => p.WorkflowName).HasColumnName("WorkflowName");
-    e.Property(p => p.ProjectName).HasColumnName("ProjectName");
-    e.Property(p => p.DepartmentName).HasColumnName("DepartmentName");
-    e.Property(p => p.ApproverName).HasColumnName("ApproverName");
-    e.Property(p => p.AssignedAt).HasColumnName("AssignedAt");
-    e.Property(p => p.FirstOpenedAt).HasColumnName("FirstOpenedAt");
-    e.Property(p => p.FirstOpenedLatencySecs).HasColumnName("FirstOpenedLatencySecs");
-    e.Property(p => p.ApprovedAt).HasColumnName("ApprovedAt");
-    e.Property(p => p.ApprovalLatencySecs).HasColumnName("ApprovalLatencySecs");
-    e.Property(p => p.Decision).HasColumnName("Decision");
-    e.Property(p => p.AttachmentViewsCount).HasColumnName("AttachmentViewsCount");
-    e.Property(p => p.AttachmentFirstViewedAt).HasColumnName("AttachmentFirstViewedAt");
-});
+            // =============================
+            // NEW: keyless mapping for SP result
+            // =============================
+            // Keyless mapping for API-projected report rows
+            // Keyless mapping for API-projected report rows
+            modelBuilder.Entity<ReportsUserActivityRow>(e =>
+            {
+                e.HasNoKey();
+                e.ToView(null);
+                e.Property(p => p.FundRequestId).HasColumnName("FundRequestId");
+                e.Property(p => p.RequestTitle).HasColumnName("RequestTitle");
+                e.Property(p => p.WorkflowName).HasColumnName("WorkflowName");
+                e.Property(p => p.ProjectName).HasColumnName("ProjectName");
+                e.Property(p => p.DepartmentName).HasColumnName("DepartmentName");
+                e.Property(p => p.ApproverName).HasColumnName("ApproverName");
+                e.Property(p => p.AssignedAt).HasColumnName("AssignedAt");
+                e.Property(p => p.FirstOpenedAt).HasColumnName("FirstOpenedAt");
+                e.Property(p => p.FirstOpenedLatencySecs).HasColumnName("FirstOpenedLatencySecs");
+                e.Property(p => p.ApprovedAt).HasColumnName("ApprovedAt");
+                e.Property(p => p.ApprovalLatencySecs).HasColumnName("ApprovalLatencySecs");
+                e.Property(p => p.Decision).HasColumnName("Decision");
+                e.Property(p => p.AttachmentViewsCount).HasColumnName("AttachmentViewsCount");
+                e.Property(p => p.AttachmentFirstViewedAt).HasColumnName("AttachmentFirstViewedAt");
+            });
 
 
+        }
+               public Task<int> InsertAuditLogAsync(AuditLog log, CancellationToken ct = default)
+        {
+            return Database.ExecuteSqlInterpolatedAsync(
+                $@"
+                    INSERT INTO [AuditLogs] ([Event], [Entity], [EntityId], [UserId], [ActorName], [Comments], [Timestamp])
+                    VALUES ({log.Event}, {log.Entity}, {log.EntityId}, {log.ActorId}, {log.ActorName}, {log.Comments}, {log.CreatedAt})
+                ",
+                ct);
         }
     }
 }

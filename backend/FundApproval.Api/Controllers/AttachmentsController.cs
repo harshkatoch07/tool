@@ -68,17 +68,18 @@ namespace FundApproval.Api.Controllers
         // Unified Audit logger — matches dbo.AuditLogs schema
         private async Task WriteAuditAsync(string @event, string entity, int? entityId, int? actorId, string? comments, CancellationToken ct)
         {
-            _db.AuditLogs.Add(new AuditLog
+            var log = new AuditLog
             {
-                Event      = @event,
-                Entity     = entity,
-                EntityId   = entityId,
-                ActorId    = actorId,
-                ActorName  = null,                  // optional; resolve if you want
-                Comments   = comments,
-                CreatedAt  = DateTime.UtcNow
-            });
-            await _db.SaveChangesAsync(ct);
+                Event     = @event,
+                Entity    = entity,
+                EntityId  = entityId,
+                ActorId   = actorId,
+                ActorName = null,
+                Comments  = comments,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _db.InsertAuditLogAsync(log, ct);
         }
 
         // -----------------
