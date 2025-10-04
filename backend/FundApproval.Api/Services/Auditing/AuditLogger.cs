@@ -51,8 +51,7 @@ namespace FundApproval.Api.Services.Auditing
                 CreatedAt = DateTime.UtcNow
             };
 
-            _db.AuditLogs.Add(log);
-            await _db.SaveChangesAsync(ct);
+            await _db.InsertAuditLogAsync(log, ct);
         }
 
         // Int-based overload (for places passing an int)
