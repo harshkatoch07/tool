@@ -28,85 +28,85 @@ export default function UserActivityReport() {
       field: "FundRequestId", 
       headerName: "Request ID", 
       width: 110,
-      renderCell: (row) => row.FundRequestId || "—"
+      render: (row) => row.FundRequestId || "—"  // ✅ Changed to 'render'
     },
     { 
       field: "RequestTitle", 
       headerName: "Request Title", 
       flex: 1,
-      renderCell: (row) => row.RequestTitle || "—"
+      render: (row) => row.RequestTitle || "—"  // ✅ Changed to 'render'
     },
     { 
       field: "WorkflowName", 
       headerName: "Workflow", 
       width: 150,
-      renderCell: (row) => row.WorkflowName || "—"
+      render: (row) => row.WorkflowName || "—"  // ✅ Changed to 'render'
     },
     { 
       field: "ProjectName", 
       headerName: "Project", 
       width: 150,
-      renderCell: (row) => row.ProjectName || "—"
+      render: (row) => row.ProjectName || "—"  // ✅ Changed to 'render'
     },
     { 
       field: "DepartmentName", 
       headerName: "Department", 
       width: 150,
-      renderCell: (row) => row.DepartmentName || "—"
+      render: (row) => row.DepartmentName || "—"  // ✅ Changed to 'render'
     },
     { 
       field: "ApproverName", 
       headerName: "Approver", 
       width: 150,
-      renderCell: (row) => row.ApproverName || "—"
+      render: (row) => row.ApproverName || "—"  // ✅ Changed to 'render'
     },
     {
       field: "AssignedAt",
       headerName: "Assigned (UTC)",
       width: 180,
-      renderCell: (row) => formatDate(row.AssignedAt)
+      render: (row) => formatDate(row.AssignedAt)  // ✅ Changed to 'render'
     },
     {
       field: "FirstOpenedAt",
       headerName: "First Open",
       width: 180,
-      renderCell: (row) => formatDate(row.FirstOpenedAt)
+      render: (row) => formatDate(row.FirstOpenedAt)  // ✅ Changed to 'render'
     },
     {
       field: "FirstOpenedLatencySecs",
       headerName: "Min Assign→Open",
       width: 150,
-      renderCell: (row) => formatMinutes(row.FirstOpenedLatencySecs)
+      render: (row) => formatMinutes(row.FirstOpenedLatencySecs)  // ✅ Changed to 'render'
     },
     {
       field: "ApprovedAt",
       headerName: "Decision At",
       width: 180,
-      renderCell: (row) => formatDate(row.ApprovedAt)
+      render: (row) => formatDate(row.ApprovedAt)  // ✅ Changed to 'render'
     },
     {
       field: "ApprovalLatencySecs",
       headerName: "Min Assign→Decision",
       width: 180,
-      renderCell: (row) => formatMinutes(row.ApprovalLatencySecs)
+      render: (row) => formatMinutes(row.ApprovalLatencySecs)  // ✅ Changed to 'render'
     },
     { 
       field: "Decision", 
       headerName: "Decision", 
       width: 120,
-      renderCell: (row) => row.Decision || "—"
+      render: (row) => row.Decision || "—"  // ✅ Changed to 'render'
     },
     {
       field: "AttachmentViewsCount",
       headerName: "Attachment Views",
       width: 150,
-      renderCell: (row) => (row.AttachmentViewsCount ?? 0).toString()
+      render: (row) => (row.AttachmentViewsCount ?? 0).toString()  // ✅ Changed to 'render'
     },
     {
       field: "AttachmentFirstViewedAt",
       headerName: "First Attachment View",
       width: 200,
-      renderCell: (row) => formatDate(row.AttachmentFirstViewedAt)
+      render: (row) => formatDate(row.AttachmentFirstViewedAt)  // ✅ Changed to 'render'
     },
   ];
 }, []);

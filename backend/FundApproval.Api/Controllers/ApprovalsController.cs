@@ -391,101 +391,213 @@ request.CurrentLevel = finalLevel;
                     return Ok(finals);
                 }
 
-                case "rejected":
-                {
-                    var rejected = await _db.FundRequests
-                        .Include(fr => fr.Workflow)
-                        .Include(fr => fr.Department)
-                        .Where(fr => fr.InitiatorId == userId && fr.Status == StatusRejected)
-                        .OrderByDescending(fr => fr.CreatedAt)
-                        .Select(fr => new
-                        {
-                            ApprovalId    = (int?)null,
-                            Status        = fr.Status,
-                            Comments      = (string?)null,
-                            ActionedAt    = (DateTime?)null,
-                            Level         = fr.CurrentLevel,
-                            FundRequestId = fr.Id,
-                            Title         = fr.RequestTitle,
-                            WorkflowName  = fr.Workflow != null ? fr.Workflow.Name : null,
-                            Amount        = fr.Amount,             // ✅
-                            Department    = fr.Department != null ? fr.Department.Name : null,
-                            CreatedAt     = fr.CreatedAt
-                        })
-                        .ToListAsync();
-
-                    return Ok(rejected);
-                }
-
-                case "sentback":
+              case "rejected":
 {
-    var userId = GetUserIdOrThrow();
+    // A) Requests I initiated that were rejected
+    var rejectedByMeAsInitiator = await _db.FundRequests
+        .Include(fr => fr.Workflow)
+        .Include(fr => fr.Department)
+        .Where(fr => fr.InitiatorId == userId && fr.Status == StatusRejected)
+        .OrderByDescending(fr => fr.CreatedAt)
+        .Select(fr => new
+        {
+            FundRequestId = fr.Id,
+            ApprovalId    = (int?)null,
+            Title         = fr.RequestTitle,
+            WorkflowName  = fr.Workflow != null ? fr.Workflow.Name : null,
+            Amount        = (decimal?)fr.Amount,
+            Department    = fr.Department != null ? fr.Department.Name : null,
+            Level         = fr.CurrentLevel,
+            Status        = fr.Status,
+            CreatedAt     = fr.CreatedAt,
+            ActionedAt    = (DateTime?)null,
+            Comments      = (string?)null,
+            IsPendingForMe = false
+        })
+        .ToListAsync();
 
-    // A) Sent back to me (or initiator at level 0)
-    var sentBackToMe = _db.Approvals
-        .AsNoTracking()
+    // B) Requests where I was an approver and someone rejected it
+    var myApprovals = await _db.Approvals
+        .Where(a => a.ApproverId == userId && a.ActionedAt != null)
+        .Select(a => new
+        {
+            a.Id,
+            a.FundRequestId,
+            a.Status,
+            a.ActionedAt
+        })
+        .ToListAsync();
+
+    var myApprovedRequestIds = myApprovals
+        .Select(a => a.FundRequestId)
+        .Distinct()
+        .ToList();
+
+    if (myApprovedRequestIds.Any())
+    {
+        var rejectedWhereIApproved = await _db.FundRequests
+            .Where(fr => myApprovedRequestIds.Contains(fr.Id) && fr.Status == StatusRejected)
+            .Include(fr => fr.Workflow)
+            .Include(fr => fr.Department)
+            .Select(fr => new
+            {
+                fr.Id,
+                fr.RequestTitle,
+                fr.Amount,
+                fr.CurrentLevel,
+                fr.CreatedAt,
+                fr.Status,
+                WorkflowName = fr.Workflow != null ? fr.Workflow.Name : null,
+                Department   = fr.Department != null ? fr.Department.Name : null
+            })
+            .ToListAsync();
+
+        var actionAtMap = myApprovals
+            .GroupBy(a => a.FundRequestId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(x => x.ActionedAt).ThenByDescending(x => x.Id).First().ActionedAt
+            );
+
+        var rejectedAsApproverList = rejectedWhereIApproved
+            .Where(fr => !rejectedByMeAsInitiator.Any(r => r.FundRequestId == fr.Id))
+            .Select(fr => new
+            {
+                FundRequestId  = fr.Id,
+                ApprovalId     = (int?)null,
+                Title          = fr.RequestTitle,
+                WorkflowName   = fr.WorkflowName,
+                Amount         = (decimal?)fr.Amount,
+                Department     = fr.Department,
+                Level          = fr.CurrentLevel,
+                Status         = fr.Status,
+                CreatedAt      = fr.CreatedAt,
+                ActionedAt     = actionAtMap.ContainsKey(fr.Id) ? actionAtMap[fr.Id] : (DateTime?)null,
+                Comments       = (string?)null,
+                IsPendingForMe = false
+            })
+            .ToList();
+
+        // ✅ Now both have the same property order
+        var combined = rejectedByMeAsInitiator
+            .Concat(rejectedAsApproverList)
+            .GroupBy(x => x.FundRequestId)
+            .Select(g => g.OrderByDescending(x => x.ActionedAt ?? x.CreatedAt).First())
+            .OrderByDescending(x => x.ActionedAt ?? x.CreatedAt)
+            .ToList();
+
+        return Ok(combined);
+    }
+
+    return Ok(rejectedByMeAsInitiator);
+}
+
+               case "sentback":
+{
+    // A) Currently sent back to me OR back to initiator at level 0
+    var sentBackToMeList = await _db.Approvals
         .Include(a => a.FundRequest).ThenInclude(fr => fr.Workflow)
         .Include(a => a.FundRequest).ThenInclude(fr => fr.Department)
         .Where(a =>
-            // pending for me while request is in SentBack
             (a.ApproverId == userId &&
              a.Status == StatusPending &&
              a.FundRequest.Status == StatusSentBack)
             ||
-            // initiator case: level 0, request is SentBack
             (a.FundRequest.InitiatorId == userId &&
              a.FundRequest.Status == StatusSentBack &&
              a.FundRequest.CurrentLevel == 0)
         )
         .Select(a => new
         {
-            FundRequestId = a.FundRequest.Id,
-            ApprovalId    = a.ApproverId == userId ? (int?)a.Id : null,
-            Title         = a.FundRequest.RequestTitle,
-            WorkflowName  = a.FundRequest.Workflow != null ? a.FundRequest.Workflow.Name : null,
-            Amount        = a.FundRequest.Amount,
-            Department    = a.FundRequest.Department != null ? a.FundRequest.Department.Name : null,
-            Level         = a.FundRequest.CurrentLevel,
-            CreatedAt     = a.FundRequest.CreatedAt,
-            LastDate      = (DateTime?)a.ActionedAt ?? a.FundRequest.CreatedAt,
+            FundRequestId  = a.FundRequest.Id,
+            ApprovalId     = a.ApproverId == userId ? (int?)a.Id : null,
+            Title          = a.FundRequest.RequestTitle,
+            WorkflowName   = a.FundRequest.Workflow != null ? a.FundRequest.Workflow.Name : null,
+            Amount         = (decimal?)a.FundRequest.Amount,
+            Department     = a.FundRequest.Department != null ? a.FundRequest.Department.Name : null,
+            Level          = a.FundRequest.CurrentLevel,
+            CreatedAt      = a.FundRequest.CreatedAt,
+            ActionedAt     = (DateTime?)null,
             IsPendingForMe = a.ApproverId == userId
-        });
-
-    // B) I sent it back (my latest action on that request = SentBack)
-    var iSentBack =
-        from a in _db.Approvals.AsNoTracking()
-        where a.ApproverId == userId && a.ActionedAt != null
-        group a by a.FundRequestId into g
-        let last = g.OrderByDescending(x => x.ActionedAt).ThenByDescending(x => x.Id).FirstOrDefault()
-        where last != null && last.Status == StatusSentBack
-        join fr in _db.FundRequests.AsNoTracking() on g.Key equals fr.Id
-        join wf in _db.Workflows.AsNoTracking() on fr.WorkflowId equals wf.WorkflowId into wf0
-        from wf in wf0.DefaultIfEmpty()
-        join d in _db.Departments.AsNoTracking() on fr.DepartmentId equals d.DepartmentID into d0
-        from d in d0.DefaultIfEmpty()
-        select new
-        {
-            FundRequestId = fr.Id,
-            ApprovalId    = (int?)null, // not currently assigned to me
-            Title         = fr.RequestTitle,
-            WorkflowName  = wf != null ? wf.Name : null,
-            Amount        = fr.Amount,
-            Department    = d != null ? d.Name : null,
-            Level         = fr.CurrentLevel,
-            CreatedAt     = fr.CreatedAt,
-            LastDate      = last.ActionedAt,
-            IsPendingForMe = false
-        };
-
-    var items = await sentBackToMe
-        .Union(iSentBack)
-        .GroupBy(x => x.FundRequestId)
-        .Select(g => g.OrderByDescending(x => x.LastDate).First())
-        .OrderByDescending(x => x.LastDate)
+        })
         .ToListAsync();
 
-    return Ok(items);
+    // B) I sent it back (my LAST action = SentBack)
+    // ✅ FIX: Materialize ALL my approvals first, then process in-memory
+    var myApprovals = await _db.Approvals
+        .Where(a => a.ApproverId == userId && a.ActionedAt != null)
+        .Select(a => new
+        {
+            a.Id,
+            a.FundRequestId,
+            a.Status,
+            a.ActionedAt
+        })
+        .ToListAsync(); // ✅ Materialize to in-memory list
+
+    // Now work in-memory to find last action per request
+    var lastByRequest = myApprovals
+        .GroupBy(a => a.FundRequestId)
+        .Select(g => new
+        {
+            FundRequestId = g.Key,
+            LastApproval = g.OrderByDescending(x => x.ActionedAt).ThenByDescending(x => x.Id).First()
+        })
+        .Where(x => x.LastApproval.Status == StatusSentBack)
+        .ToList();
+
+    var sentBackFundRequestIds = lastByRequest.Select(x => x.FundRequestId).ToList();
+
+    if (sentBackFundRequestIds.Any())
+    {
+        var frs = await _db.FundRequests
+            .Where(fr => sentBackFundRequestIds.Contains(fr.Id))
+            .Include(fr => fr.Workflow)
+            .Include(fr => fr.Department)
+            .Select(fr => new
+            {
+                fr.Id,
+                fr.RequestTitle,
+                fr.Amount,
+                fr.CurrentLevel,
+                fr.CreatedAt,
+                WorkflowName = fr.Workflow != null ? fr.Workflow.Name : null,
+                Department   = fr.Department != null ? fr.Department.Name : null
+            })
+            .ToListAsync();
+
+        var actionAtMap = lastByRequest.ToDictionary(x => x.FundRequestId, x => x.LastApproval.ActionedAt);
+
+        var iSentBackList = frs
+            .Select(fr => new
+            {
+                FundRequestId  = fr.Id,
+                ApprovalId     = (int?)null,
+                Title          = fr.RequestTitle,
+                WorkflowName   = fr.WorkflowName,
+                Amount         = (decimal?)fr.Amount,
+                Department     = fr.Department,
+                Level          = fr.CurrentLevel,
+                CreatedAt      = fr.CreatedAt,
+                ActionedAt     = actionAtMap.ContainsKey(fr.Id) ? actionAtMap[fr.Id] : (DateTime?)null,
+                IsPendingForMe = false
+            })
+            .ToList();
+
+        // Combine both lists
+        var combined = sentBackToMeList
+            .Concat(iSentBackList)
+            .GroupBy(x => x.FundRequestId)
+            .Select(g => g.OrderByDescending(x => x.ActionedAt ?? x.CreatedAt).First())
+            .OrderByDescending(x => x.ActionedAt ?? x.CreatedAt)
+            .ToList();
+
+        return Ok(combined);
+    }
+
+    return Ok(sentBackToMeList);
 }
+
 
                 default:
                     return BadRequest("Invalid filter. Use 'assigned', 'initiated', 'approved', 'rejected', 'sentback', or 'final'.");
