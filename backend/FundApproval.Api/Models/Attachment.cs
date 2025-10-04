@@ -15,6 +15,7 @@ namespace FundApproval.Api.Models
 
         // Where the file is stored (disk path or blob url)
         public string StoragePath { get; set; } = string.Empty;
+         public string? LegacyFilePath { get; set; }
 
         // Audit
         public int UploadedBy { get; set; }

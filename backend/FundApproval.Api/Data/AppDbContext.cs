@@ -335,6 +335,7 @@ namespace FundApproval.Api.Data
                 entity.Property(a => a.ContentType).HasColumnName("ContentType").HasMaxLength(200);
                 entity.Property(a => a.FileSize).HasColumnName("FileSize");
                 entity.Property(a => a.StoragePath).HasColumnName("StoragePath").HasMaxLength(1024);
+                entity.Property(a => a.LegacyFilePath).HasColumnName("FilePath").HasMaxLength(1024);
                 entity.Property(a => a.UploadedBy).HasColumnName("UploadedBy");
                 entity.Property(a => a.UploadedAt).HasColumnName("UploadedAt");
                 entity.Property(a => a.Sha256).HasColumnName("Sha256").HasMaxLength(64);

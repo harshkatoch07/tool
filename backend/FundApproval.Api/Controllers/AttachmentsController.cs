@@ -58,7 +58,37 @@ namespace FundApproval.Api.Controllers
             Directory.CreateDirectory(root);
             return root;
         }
+        private string? ResolveAttachmentPath(Attachment attachment)
+        {
+            var candidate = !string.IsNullOrWhiteSpace(attachment.StoragePath)
+                ? attachment.StoragePath
+                : attachment.LegacyFilePath;
 
+            if (string.IsNullOrWhiteSpace(candidate))
+                return null;
+
+            if (Path.IsPathRooted(candidate))
+                return candidate;
+
+            var trimmed = candidate.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return Path.Combine(_env.ContentRootPath, trimmed);
+        }
+
+        private void TryDeleteFile(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            try
+            {
+                if (System.IO.File.Exists(path))
+                    System.IO.File.Delete(path);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed deleting attachment file: {Path}", path);
+            }
+        }
         private async Task<bool> UserIsApproverAsync(int fundRequestId, int userId, CancellationToken ct)
         {
             return await _db.Approvals
@@ -205,6 +235,7 @@ namespace FundApproval.Api.Controllers
                 ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
                 FileSize = file.Length,
                 StoragePath = fullPath,
+                LegacyFilePath = fullPath,
                 UploadedBy = me,
                 UploadedAt = DateTime.UtcNow
             };
@@ -255,20 +286,20 @@ namespace FundApproval.Api.Controllers
                 await file.CopyToAsync(fs, ct);
             }
 
-            var oldPath = att.StoragePath;
+            var oldResolvedPath = ResolveAttachmentPath(att);
 
             att.FileName = file.FileName;
             att.ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType;
             att.FileSize = file.Length;
             att.StoragePath = fullPath;
+            att.LegacyFilePath = fullPath;
             att.UploadedBy = me;
             att.UploadedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync(ct);
 
             // Try to remove old blob/file (best-effort)
-            try { if (!string.IsNullOrWhiteSpace(oldPath) && System.IO.File.Exists(oldPath)) System.IO.File.Delete(oldPath); }
-            catch (Exception ex) { _logger.LogWarning(ex, "Failed deleting old attachment file: {Path}", oldPath); }
+TryDeleteFile(oldResolvedPath);
 
             await WriteAuditAsync(
                 @event: "AttachmentReplaced",
@@ -300,12 +331,12 @@ namespace FundApproval.Api.Controllers
 
             var att = await _db.Attachments.FirstOrDefaultAsync(a => a.Id == attachmentId && a.FundRequestId == id, ct);
             if (att is null) return NotFound("Attachment not found.");
+            var resolvedPath = ResolveAttachmentPath(att);
 
             _db.Attachments.Remove(att);
             await _db.SaveChangesAsync(ct);
 
-            try { if (!string.IsNullOrWhiteSpace(att.StoragePath) && System.IO.File.Exists(att.StoragePath)) System.IO.File.Delete(att.StoragePath); }
-            catch (Exception ex) { _logger.LogWarning(ex, "Failed deleting attachment file: {Path}", att.StoragePath); }
+TryDeleteFile(resolvedPath);
 
             await WriteAuditAsync(
                 @event: "AttachmentDeleted",
@@ -336,7 +367,9 @@ namespace FundApproval.Api.Controllers
             var a = await _db.Attachments.AsNoTracking().FirstOrDefaultAsync(x => x.Id == attachmentId && x.FundRequestId == id, ct);
             if (a is null) return NotFound("Attachment not found.");
 
-            if (string.IsNullOrWhiteSpace(a.StoragePath) || !System.IO.File.Exists(a.StoragePath))
+            var resolvedPath = ResolveAttachmentPath(a);
+
+            if (string.IsNullOrWhiteSpace(resolvedPath) || !System.IO.File.Exists(resolvedPath))
                 return NotFound("File missing on server.");
 
             // 🔎 View log
@@ -350,7 +383,7 @@ namespace FundApproval.Api.Controllers
                 ct: ct
             );
 
-            var stream = System.IO.File.OpenRead(a.StoragePath);
+           var stream = System.IO.File.OpenRead(resolvedPath);
             var contentType = string.IsNullOrWhiteSpace(a.ContentType) ? "application/octet-stream" : a.ContentType;
 
             if (inline)
