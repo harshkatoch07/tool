@@ -1,7 +1,8 @@
+// src/components/initiate/ResubmitPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Box, CircularProgress, Snackbar, Alert } from "@mui/material";
-import { getApprovalTrail } from "../../api/approvalsApi";
+// removed: getApprovalTrail
 import { http, authHeaders } from "../../api/http";
 import InitiateForm from "../forms/InitiateForm";
 import ApprovalPathDialog from "./ApprovalPathDialog";
@@ -88,7 +89,7 @@ const adaptSnapshot = (snapshot, attachments = []) => {
   return result;
 };
 
-const ALLOWED_TABS = ["initiated", "sentback", "assigned", "approved","rejected"];
+const ALLOWED_TABS = ["initiated", "sentback", "assigned", "approved", "rejected"];
 
 export default function ResubmitPage() {
   const { id } = useParams();
@@ -125,15 +126,51 @@ export default function ResubmitPage() {
     [effectiveTab, role]
   );
 
+  // ⬇️ Load trail only when the dialog opens. Resolve FundRequestId first.
   useEffect(() => {
     let alive = true;
-    setTrail(null);
-    if (!approvalId) return () => { alive = false; };
-    getApprovalTrail(approvalId)
-      .then((t) => alive && setTrail(t))
-      .catch(() => alive && setTrail(null));
-    return () => { alive = false; };
-  }, [approvalId, id]);
+    if (!openPath) return () => { alive = false; };
+
+    (async () => {
+      try {
+        setTrail(null);
+
+        // prefer known fundRequestId from state or snapshot
+        let frid =
+          fundRequestId ??
+          formData?.fundRequestId ??
+          formData?.requestId ??
+          formData?.RequestId ??
+          formData?.id ??
+          formData?.Id ??
+          null;
+
+        // if only approvalId is known, resolve FR id from the approval
+        if (!frid && approvalId) {
+          const { data } = await http.get(`/approvals/${approvalId}`, { headers: authHeaders() });
+          frid =
+            data?.FundRequestId ??
+            data?.fundRequestId ??
+            data?.requestId ??
+            data?.Id ??
+            data?.id ??
+            null;
+        }
+
+        if (!frid) return;
+
+        // correct endpoint expects fundRequestId
+        const { data } = await http.get(`/approvals/${frid}/trail`, { headers: authHeaders() });
+        if (alive) setTrail(data);
+      } catch {
+        if (alive) setTrail(null);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [openPath, fundRequestId, formData, approvalId]);
 
   useEffect(() => {
     setApproverFeedback({ open: false, message: "", action: null, result: null });
@@ -247,8 +284,6 @@ export default function ResubmitPage() {
           return adaptSnapshot(resp.data, attachments);
         };
 
-        
-
         const errors = [];
         const assignResult = async (promiseFactory, { viaFundRequest } = {}) => {
           try {
@@ -297,7 +332,6 @@ export default function ResubmitPage() {
         }
       } catch (e) {
         if (alive) {
-          
           console.error("Unexpected error loading resubmit data", e);
           setError("We couldn't load the request details. Please try again later.");
           setFormData(null);
@@ -306,7 +340,7 @@ export default function ResubmitPage() {
         if (alive) setLoading(false);
       }
     };
-    
+
     fetchFormData();
     return () => {
       alive = false;
@@ -351,7 +385,7 @@ export default function ResubmitPage() {
     }
     return fallbackId;
   }, [fundRequestId, id, isApproverView, loadedViaFundRequest]);
- 
+
   if (loading && !error) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
@@ -368,11 +402,14 @@ export default function ResubmitPage() {
     );
   }
 
-  // Always show attachments. Allow editing only when not assigned/approved.
-  
   return (
     <Box sx={{ width: "100%", maxWidth: 1600, mx: "auto" }}>
-      <ApprovalPathDialog open={openPath} onClose={() => setOpenPath(false)} trail={trail} />
+      <ApprovalPathDialog
+        open={openPath}
+        onClose={() => setOpenPath(false)}
+        trail={trail}
+        loading={openPath && !trail}
+      />
 
       <React.Fragment key={viewKey}>
         <InitiateForm
@@ -398,7 +435,6 @@ export default function ResubmitPage() {
         open={approverFeedback.open}
         autoHideDuration={4000}
         onClose={handleToastClose}
-       
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
         <Alert onClose={handleToastClose} severity="success" sx={{ width: "100%" }}>
@@ -407,6 +443,4 @@ export default function ResubmitPage() {
       </Snackbar>
     </Box>
   );
-
 }
-

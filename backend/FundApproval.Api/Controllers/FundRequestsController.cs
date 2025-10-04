@@ -276,6 +276,7 @@ namespace FundApproval.Api.Controllers
                 {
                     Type = "Assigned",
                     ApprovalId = x.a.Id,
+                    FundRequestId = x.a.FundRequestId,
                     RequestTitle = x.fr.RequestTitle,
                     Status = x.a.Status,
                     CurrentLevel = x.a.Level,
