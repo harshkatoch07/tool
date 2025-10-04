@@ -60,18 +60,28 @@ namespace FundApproval.Api.Controllers
         }
         private string? ResolveAttachmentPath(Attachment attachment)
         {
-            var candidate = !string.IsNullOrWhiteSpace(attachment.StoragePath)
-                ? attachment.StoragePath
-                : attachment.LegacyFilePath;
+            static string? NormalizeCandidate(string? value)
+                => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-            if (string.IsNullOrWhiteSpace(candidate))
+             var primary = NormalizeCandidate(attachment.StoragePath);
+            if (!string.IsNullOrEmpty(primary))
+            {
+                if (Path.IsPathRooted(primary))
+                    return primary;
+
+                var trimmedPrimary = primary.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                return Path.Combine(_env.ContentRootPath, trimmedPrimary);
+            }
+
+            var legacy = NormalizeCandidate(attachment.LegacyFilePath);
+            if (string.IsNullOrEmpty(legacy))
                 return null;
 
-            if (Path.IsPathRooted(candidate))
-                return candidate;
+            if (Path.IsPathRooted(legacy))
+                return legacy;
 
-            var trimmed = candidate.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            return Path.Combine(_env.ContentRootPath, trimmed);
+            var trimmedLegacy = legacy.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return Path.Combine(_env.ContentRootPath, trimmedLegacy);
         }
 
         private void TryDeleteFile(string? path)

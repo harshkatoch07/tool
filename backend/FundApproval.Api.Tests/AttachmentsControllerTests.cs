@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -118,7 +119,24 @@ namespace FundApproval.Api.Tests
             controller.ControllerContext.HttpContext.Connection.RemoteIpAddress = IPAddress.Loopback;
             return controller;
         }
+        [Fact]
+        public void AttachmentModel_MapsLegacyColumn()
+        {
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseSqlite("DataSource=:memory:")
+                .Options;
 
+            using var context = new AppDbContext(options);
+            var entity = context.Model.FindEntityType(typeof(Attachment));
+            Assert.NotNull(entity);
+
+            var property = entity!.FindProperty(nameof(Attachment.LegacyFilePath));
+            Assert.NotNull(property);
+
+            var identifier = StoreObjectIdentifier.Table("Attachments");
+            var columnName = property!.GetColumnName(identifier);
+            Assert.Equal("LegacyFilePath", columnName);
+        }
         [Fact]
         public async Task Download_UsesStoragePath_WhenAvailable()
         {
@@ -216,5 +234,104 @@ namespace FundApproval.Api.Tests
                 Assert.Equal("legacy-file", text);
             }
         }
+    
+
+[Fact]
+        public async Task Download_ReturnsNotFound_WhenNoPathAvailable()
+        {
+            await using var connection = new SqliteConnection("DataSource=:memory:");
+            await connection.OpenAsync();
+            var options = CreateOptions(connection);
+
+            using var tempDir = new TempDirectory();
+
+            await using (var setupContext = new AppDbContext(options))
+            {
+                await setupContext.Database.EnsureCreatedAsync();
+                await SeedFundRequestAsync(setupContext);
+
+                setupContext.Attachments.Add(new Attachment
+                {
+                    Id = 3,
+                    FundRequestId = 1,
+                    FileName = "missing.txt",
+                    ContentType = "text/plain",
+                    FileSize = 0,
+                    StoragePath = string.Empty,
+                    LegacyFilePath = null,
+                    UploadedBy = InitiatorId,
+                    UploadedAt = DateTime.UtcNow
+                });
+
+                await setupContext.SaveChangesAsync();
+            }
+
+            await using (var assertionContext = new AppDbContext(options))
+            {
+                var controller = CreateController(assertionContext, tempDir.DirectoryPath);
+
+                var result = await controller.Download(1, 3, inline: false, ct: CancellationToken.None);
+                var notFound = Assert.IsType<NotFoundObjectResult>(result);
+                Assert.Equal("File missing on server.", notFound.Value);
+            }
+        }
+
+        [Fact]
+        public async Task Download_ThrowsHelpfulError_WhenLegacyColumnMissing()
+        {
+            await using var connection = new SqliteConnection("DataSource=:memory:");
+            await connection.OpenAsync();
+
+            const string schemaSql = @"
+CREATE TABLE FundRequests (
+    Id INTEGER PRIMARY KEY,
+    RequestTitle TEXT,
+    InitiatorId INTEGER NOT NULL,
+    WorkflowId INTEGER NOT NULL,
+    DepartmentId INTEGER NOT NULL,
+    Status TEXT NOT NULL,
+    Amount REAL NOT NULL
+);
+CREATE TABLE Attachments (
+    Id INTEGER PRIMARY KEY,
+    FundRequestId INTEGER NOT NULL,
+    FileName TEXT,
+    ContentType TEXT,
+    FileSize INTEGER,
+    StoragePath TEXT,
+    UploadedBy INTEGER,
+    UploadedAt TEXT
+);
+";
+
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = schemaSql;
+                await command.ExecuteNonQueryAsync();
+            }
+
+            var options = CreateOptions(connection);
+
+            using var tempDir = new TempDirectory();
+
+            await using (var setupContext = new AppDbContext(options))
+            {
+                await setupContext.Database.ExecuteSqlRawAsync(
+                    "INSERT INTO FundRequests (Id, RequestTitle, InitiatorId, WorkflowId, DepartmentId, Status, Amount) VALUES (1, 'Test', {0}, 1, 1, 'Pending', 100)",
+                    InitiatorId);
+
+                await setupContext.Database.ExecuteSqlRawAsync(
+                    "INSERT INTO Attachments (Id, FundRequestId, FileName, ContentType, FileSize, StoragePath, UploadedBy, UploadedAt) VALUES (1, 1, 'legacy.txt', 'text/plain', 0, '', {0}, datetime('now'))",
+                    InitiatorId);
+            }
+
+            await using (var assertionContext = new AppDbContext(options))
+            {
+                var controller = CreateController(assertionContext, tempDir.DirectoryPath);
+
+                var ex = await Assert.ThrowsAsync<SqliteException>(() => controller.Download(1, 1, inline: false, ct: CancellationToken.None));
+                Assert.Contains("LegacyFilePath", ex.Message, StringComparison.OrdinalIgnoreCase);
+            }
+        }
     }
-}
+}        
