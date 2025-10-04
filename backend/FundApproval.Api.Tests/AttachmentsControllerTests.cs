@@ -120,7 +120,7 @@ namespace FundApproval.Api.Tests
             return controller;
         }
         [Fact]
-        public void AttachmentModel_MapsLegacyColumn()
+        public void AttachmentModel_MapsLegacyPropertyToFilePathColumn()
         {
             var options = new DbContextOptionsBuilder<AppDbContext>()
                 .UseSqlite("DataSource=:memory:")
@@ -135,7 +135,7 @@ namespace FundApproval.Api.Tests
 
             var identifier = StoreObjectIdentifier.Table("Attachments");
             var columnName = property!.GetColumnName(identifier);
-            Assert.Equal("LegacyFilePath", columnName);
+            Assert.Equal("FilePath", columnName);
         }
         [Fact]
         public async Task Download_UsesStoragePath_WhenAvailable()
@@ -330,7 +330,7 @@ CREATE TABLE Attachments (
                 var controller = CreateController(assertionContext, tempDir.DirectoryPath);
 
                 var ex = await Assert.ThrowsAsync<SqliteException>(() => controller.Download(1, 1, inline: false, ct: CancellationToken.None));
-                Assert.Contains("LegacyFilePath", ex.Message, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("FilePath", ex.Message, StringComparison.OrdinalIgnoreCase);
             }
         }
     }
