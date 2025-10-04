@@ -14,6 +14,7 @@ import { MemoryRouter, useInRouterContext, useParams, useNavigate, useSearchPara
 import { useTheme, alpha } from "@mui/material/styles";
 import ApproverActionBar from "../initiate/ApproverActionBar";
 import TimelineIcon from "@mui/icons-material/Timeline";
+import { downloadAttachment } from "../../api/attachmentsApi";
 
 // ---------------------------------------------
 // Minimal API client (fetch-based) + optional mocks
@@ -545,6 +546,87 @@ function InitiateFormImpl({
       return { ...prev, attachments: Array.from(map.values()) };
     });
   };
+  
+  const handleViewAttachment = async (event, attachment) => {
+    event?.preventDefault?.();
+    if (!attachment || typeof window === "undefined") return;
+
+    try {
+      let blob = null;
+      if (attachment.isExisting && attachment.id && id) {
+        const result = await downloadAttachment(id, attachment.id, { inline: true });
+        blob = result?.blob ?? null;
+      } else if (typeof File !== "undefined" && attachment instanceof File) {
+        blob = attachment;
+      }
+
+      if (!blob) {
+        if (attachment.url) {
+          window.open(attachment.url, "_blank", "noopener,noreferrer");
+        }
+        return;
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      const newWindow = window.open(objectUrl, "_blank", "noopener,noreferrer");
+      if (!newWindow) {
+        URL.revokeObjectURL(objectUrl);
+        alert("Unable to open attachment preview. Please allow pop-ups and try again.");
+        return;
+      }
+
+      const cleanup = () => {
+        URL.revokeObjectURL(objectUrl);
+        newWindow.removeEventListener("beforeunload", cleanup);
+      };
+
+      newWindow.addEventListener("beforeunload", cleanup, { once: true });
+      setTimeout(cleanup, 60_000);
+    } catch (err) {
+      console.error("Failed to preview attachment", err);
+      alert("Unable to preview attachment. Please try again.");
+    }
+  };
+
+  const handleDownloadAttachment = async (event, attachment) => {
+    event?.preventDefault?.();
+    if (!attachment || typeof window === "undefined") return;
+
+    try {
+      let blob = null;
+      if (attachment.isExisting && attachment.id && id) {
+        const result = await downloadAttachment(id, attachment.id, { inline: false });
+        blob = result?.blob ?? null;
+      } else if (typeof File !== "undefined" && attachment instanceof File) {
+        blob = attachment;
+      }
+
+      if (!blob) {
+        if (attachment.url) {
+          const fallbackLink = document.createElement("a");
+          fallbackLink.href = attachment.url;
+          fallbackLink.target = "_blank";
+          fallbackLink.rel = "noopener noreferrer";
+          document.body.appendChild(fallbackLink);
+          fallbackLink.click();
+          document.body.removeChild(fallbackLink);
+        }
+        return;
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = attachment.name || "attachment";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (err) {
+      console.error("Failed to download attachment", err);
+      alert("Unable to download attachment. Please try again.");
+    }
+  };
 
   const buildFieldsArray = () => {
     const fields = [];
@@ -1068,51 +1150,49 @@ function InitiateFormImpl({
                 {console.log('📎 Attachments in render:', formData.attachments)}
                 {console.log('📎 Attachments in render:', formData.attachments)}
              {formData.attachments?.length > 0 &&
-  formData.attachments.map((f, i) => {
-    const viewUrl = f.url;
-    const downloadUrl = f.url + (f.url && f.url.includes('?') ? '&' : '?') + 'download=1';
-    return (
-      <span key={f.id || f.name + f.size + i} style={{ display: 'inline-flex', alignItems: 'center', margin: 4 }}>
-        <Chip
-          label={f.name}
-          variant="outlined"
-          sx={{ m: 0.5 }}
-        />
-        <Button
-          size="small"
-          variant="text"
-          href={viewUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          sx={{ ml: 0.5 }}
-        >
-          View
-        </Button>
-        <Button
-          size="small"
-          variant="text"
-          href={downloadUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          sx={{ ml: 0.5 }}
-        >
-          Download
-        </Button>
-        {allowAttachmentEdit && !disabled && (
-          <Button
-            size="small"
-            color="error"
-            variant="text"
-            onClick={() => setFormData((p) => ({ ...p, attachments: p.attachments.filter((_, idx) => idx !== i) }))}
-            sx={{ ml: 0.5 }}
-          >
-            Remove
-          </Button>
-        )}
-      </span>
-    );
-  })
-}
+                  formData.attachments.map((f, i) => {
+                    const key = f.id || `${f.name || "attachment"}-${f.size || ""}-${i}`;
+                    return (
+                      <span
+                        key={key}
+                        style={{ display: "inline-flex", alignItems: "center", margin: 4 }}
+                      >
+                        <Chip label={f.name} variant="outlined" sx={{ m: 0.5 }} />
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={(event) => handleViewAttachment(event, f)}
+                          sx={{ ml: 0.5 }}
+                        >
+                          View
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={(event) => handleDownloadAttachment(event, f)}
+                          sx={{ ml: 0.5 }}
+                        >
+                          Download
+                        </Button>
+                        {allowAttachmentEdit && !disabled && (
+                          <Button
+                            size="small"
+                            color="error"
+                            variant="text"
+                            onClick={() =>
+                              setFormData((p) => ({
+                                ...p,
+                                attachments: p.attachments.filter((_, idx) => idx !== i),
+                              }))
+                            }
+                            sx={{ ml: 0.5 }}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </span>
+                    );
+                  })}
               </Stack>
             </Box>
           )}
