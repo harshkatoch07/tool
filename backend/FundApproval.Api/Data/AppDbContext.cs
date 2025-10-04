@@ -110,13 +110,12 @@ namespace FundApproval.Api.Data
                 entity.Property(w => w.Name).HasColumnName("Name");
                 entity.Property(w => w.Description).HasColumnName("Description");
                 entity.Property(w => w.DepartmentId).HasColumnName("DepartmentId");
-                // Optional columns in some DBs
-                entity.Ignore(w => w.Template);
-                entity.Ignore(w => w.TextBoxName);
                 entity.Property(w => w.WorkflowId).HasColumnName("WorkflowId");
                 entity.Property(w => w.Name).HasColumnName("Name");
                 entity.Property(w => w.Description).HasColumnName("Description");
                 entity.Property(w => w.DepartmentId).HasColumnName("DepartmentId");
+                entity.Property(w => w.Template).HasColumnName("Template");
+                entity.Property(w => w.TextBoxName).HasColumnName("TextBoxName");
                 entity.Property(w => w.IsActive).HasColumnName("IsActive");
                 entity.Property(w => w.CreatedAt).HasColumnName("CreatedAt");
                 entity.Property(w => w.ModifiedAt).HasColumnName("ModifiedAt");
