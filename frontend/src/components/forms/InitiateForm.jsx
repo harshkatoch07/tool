@@ -351,6 +351,36 @@ function InitiateFormImpl({
     setLoading(false);
   }, [externalFormData]);
 
+   // Load available workflows
+  useEffect(() => {
+    let isActive = true;
+    const controller = new AbortController();
+
+    const loadWorkflows = async () => {
+      setLoadError(null);
+      try {
+        const { data } = await api.get("/workflow", { signal: controller.signal });
+        if (!isActive) return;
+        const list = Array.isArray(data) ? data : [];
+        setWorkflows(list);
+        if (!isEdit && list.length === 1) {
+          setSelectedProj((prev) => prev || String(list[0]?.workflowId ?? list[0]?.id ?? ""));
+        }
+      } catch (err) {
+        if (!isActive || err?.name === "AbortError") return;
+        setWorkflows([]);
+        setLoadError(err?.message || "Unable to load workflows");
+      }
+    };
+
+    loadWorkflows();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, [isEdit]);
+  
   // Load assigned projects
   useEffect(() => {
     (async () => {
