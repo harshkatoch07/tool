@@ -61,7 +61,12 @@ namespace FundApproval.Api.Data
                 entity.Property(e => e.DesignationName).HasColumnName("DesignationName");
                 // entity.Property(e => e.IsActive).HasColumnName("IsActive"); // enable if you have this column
             });
-
+            modelBuilder.Entity<Attachment>(e =>
+    {
+        e.ToTable("Attachments");              // dbo.Attachments
+        e.Property(p => p.SizeBytes).HasColumnName("FileSize");
+        e.Property(p => p.FilePath).HasColumnName("StoragePath");
+    });
             // =============================
             // DEPARTMENT
             // =============================

@@ -11,14 +11,12 @@ namespace FundApproval.Api.Models
         // File metadata
         public string FileName { get; set; } = string.Empty;
         public string ContentType { get; set; } = "application/octet-stream";
-        public long FileSize { get; set; }
+        [Column("FileSize")]           // maps SizeBytes -> dbo.Attachments.FileSize
+    public long SizeBytes { get; set; }
 
         // Where the file is stored (disk path or blob url)
-        public string StoragePath { get; set; } = string.Empty;
-         /// <summary>
-        /// Holds the legacy relative path for attachments that pre-date <see cref="StoragePath"/>.
-        /// </summary>
-        public string? LegacyFilePath { get; set; }
+        [Column("StoragePath")]        // maps FilePath -> dbo.Attachments.StoragePath
+    public string? FilePath { get; set; }
 
         // Audit
         public int UploadedBy { get; set; }

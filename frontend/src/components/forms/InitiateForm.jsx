@@ -16,6 +16,7 @@ import ApproverActionBar from "../initiate/ApproverActionBar";
 import TimelineIcon from "@mui/icons-material/Timeline";
 import { downloadAttachment } from "../../api/attachmentsApi";
 import { getAssignedWorkflows } from "../../api/workflowApi";
+import { serializeHyperlinkUrls, toHyperlinkUrlArray } from "../../utils/hyperlinkUtils.js";
 
 // ---------------------------------------------
 // Minimal API client (fetch-based) + optional mocks
@@ -324,15 +325,14 @@ function InitiateFormImpl({
         if (!name) return acc;
         const key = name.charAt(0).toLowerCase() + name.slice(1);
         let val = f.fieldValue ?? f.value ?? "";
-        // support array for hyperlinkUrl
-        if (key === "hyperlinkUrl" && typeof val === "string") val = [val];
+        if (key === "hyperlinkUrl") val = toHyperlinkUrlArray(val);
         acc[key] = val;
         return acc;
       }, {});
     } else if (ext.fields && typeof ext.fields === "object") {
       dyn = Object.entries(ext.fields).reduce((acc, [k, v]) => {
         const key = k.charAt(0).toLowerCase() + k.slice(1);
-        acc[key] = key === "hyperlinkUrl" && typeof v === "string" ? [v] : v;
+        acc[key] = key === "hyperlinkUrl" ? toHyperlinkUrlArray(v) : v;
         return acc;
       }, {});
     }
@@ -496,7 +496,8 @@ function InitiateFormImpl({
           const name = f.fieldName ?? f.FieldName;
           const val = f.fieldValue ?? f.FieldValue;
           if (["ApprovalBy", "Priority"].includes(name)) return;
-          map[name.charAt(0).toLowerCase() + name.slice(1)] = val;
+          const key = name.charAt(0).toLowerCase() + name.slice(1);
+          map[key] = key === "hyperlinkUrl" ? toHyperlinkUrlArray(val) : val;
         });
 
         setLoadingAttachments(true);
@@ -687,10 +688,10 @@ function InitiateFormImpl({
     (schema?.fields || []).forEach((f) => {
       if (["projectId", "urgency", "additionalInfo"].includes(f.key)) return;
       let val = dynValues?.[f.key];
-      if (f.key === "hyperlinkUrl" && Array.isArray(val)) {
-        val = val.filter((v) => v && v.trim() !== "");
-        if (val.length > 0) {
-          fields.push({ fieldName: f.key.charAt(0).toUpperCase() + f.key.slice(1), fieldValue: val });
+       if (f.key === "hyperlinkUrl") {
+        const serialized = serializeHyperlinkUrls(val);
+        if (serialized) {
+          fields.push({ fieldName: f.key.charAt(0).toUpperCase() + f.key.slice(1), fieldValue: serialized });
         }
       } else if (val != null && String(val).trim() !== "") {
         fields.push({ fieldName: f.key.charAt(0).toUpperCase() + f.key.slice(1), fieldValue: String(val) });
@@ -786,11 +787,9 @@ function InitiateFormImpl({
   const renderDynField = (f) => {
     const label = f.required ? `${f.label} *` : f.label;
     if (f.key === "hyperlinkUrl") {
-      const urls = Array.isArray(dynValues.hyperlinkUrl)
-        ? dynValues.hyperlinkUrl
-        : dynValues.hyperlinkUrl
-        ? [dynValues.hyperlinkUrl]
-        : [""];
+      const rawUrls = dynValues.hyperlinkUrl;
+      const normalized = Array.isArray(rawUrls) ? rawUrls : toHyperlinkUrlArray(rawUrls);
+      const urls = normalized.length > 0 ? normalized : [""];
       return (
         <Box>
           <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
