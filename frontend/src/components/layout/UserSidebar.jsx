@@ -25,6 +25,10 @@ import OutboxRounded from "@mui/icons-material/OutboxRounded";
 import CheckCircleRounded from "@mui/icons-material/CheckCircleRounded";
 import AutorenewRounded from "@mui/icons-material/AutorenewRounded";
 import HighlightOffRounded from "@mui/icons-material/HighlightOffRounded";
+const brandLogos = {
+  compact: `${process.env.PUBLIC_URL ?? ""}/gera-logo.png`,
+  expanded: `${process.env.PUBLIC_URL ?? ""}/gera-lets-outdo.png`,
+};
 
 const drawerWidth = 230;   // keep in sync with ProtectedLayout OPEN_W
 const collapsedWidth = 60; // keep in sync with ProtectedLayout CLOSED_W
@@ -116,6 +120,7 @@ const UserSidebar = ({ open, setOpen }) => {
           display: "flex",
           alignItems: "center",
           justifyContent: open ? "flex-start" : "center",
+          gap: open ? 1 : 0,
         }}
       >
         <Box
