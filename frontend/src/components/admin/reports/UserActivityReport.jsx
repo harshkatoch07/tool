@@ -17,57 +17,99 @@ export default function UserActivityReport() {
   const [err, setErr] = useState("");
 
    const columns = useMemo(() => {
-    const formatDate = (value) =>
-      value ? new Date(value).toLocaleString() : "—";
+  const formatDate = (value) =>
+    value ? new Date(value).toLocaleString() : "—";
 
-    const formatMinutes = (seconds) =>
-      seconds == null ? "—" : Math.round(seconds / 60);
+  const formatMinutes = (seconds) =>
+    seconds == null ? "—" : Math.round(seconds / 60);
 
-    return [
-      { field: "FundRequestId", header: "Request ID", width: 110 },
-      { field: "RequestTitle", header: "Request Title" },
-      { field: "WorkflowName", header: "Workflow" },
-      { field: "ProjectName", header: "Project" },
-      { field: "DepartmentName", header: "Department" },
-      { field: "ApproverName", header: "Approver" },
-      {
-        field: "AssignedAt",
-        header: "Assigned (UTC)",
-        render: (row) => formatDate(row.AssignedAt),
-      },
-      {
-        field: "FirstOpenedAt",
-        header: "First Open",
-        render: (row) => formatDate(row.FirstOpenedAt),
-      },
-      {
-        field: "FirstOpenedLatencySecs",
-        header: "Min Assign→Open",
-        render: (row) => formatMinutes(row.FirstOpenedLatencySecs),
-      },
-      {
-        field: "ApprovedAt",
-        header: "Decision At",
-        render: (row) => formatDate(row.ApprovedAt),
-      },
-      {
-        field: "ApprovalLatencySecs",
-        header: "Min Assign→Decision",
-        render: (row) => formatMinutes(row.ApprovalLatencySecs),
-      },
-      { field: "Decision", header: "Decision" },
-      {
-        field: "AttachmentViewsCount",
-        header: "Attachment Views",
-        render: (row) => (row.AttachmentViewsCount ?? 0).toString(),
-      },
-      {
-        field: "AttachmentFirstViewedAt",
-        header: "First Attachment View",
-        render: (row) => formatDate(row.AttachmentFirstViewedAt),
-      },
-    ];
-  }, []);
+  return [
+    { 
+      field: "FundRequestId", 
+      headerName: "Request ID", 
+      width: 110,
+      renderCell: (row) => row.FundRequestId || "—"
+    },
+    { 
+      field: "RequestTitle", 
+      headerName: "Request Title", 
+      flex: 1,
+      renderCell: (row) => row.RequestTitle || "—"
+    },
+    { 
+      field: "WorkflowName", 
+      headerName: "Workflow", 
+      width: 150,
+      renderCell: (row) => row.WorkflowName || "—"
+    },
+    { 
+      field: "ProjectName", 
+      headerName: "Project", 
+      width: 150,
+      renderCell: (row) => row.ProjectName || "—"
+    },
+    { 
+      field: "DepartmentName", 
+      headerName: "Department", 
+      width: 150,
+      renderCell: (row) => row.DepartmentName || "—"
+    },
+    { 
+      field: "ApproverName", 
+      headerName: "Approver", 
+      width: 150,
+      renderCell: (row) => row.ApproverName || "—"
+    },
+    {
+      field: "AssignedAt",
+      headerName: "Assigned (UTC)",
+      width: 180,
+      renderCell: (row) => formatDate(row.AssignedAt)
+    },
+    {
+      field: "FirstOpenedAt",
+      headerName: "First Open",
+      width: 180,
+      renderCell: (row) => formatDate(row.FirstOpenedAt)
+    },
+    {
+      field: "FirstOpenedLatencySecs",
+      headerName: "Min Assign→Open",
+      width: 150,
+      renderCell: (row) => formatMinutes(row.FirstOpenedLatencySecs)
+    },
+    {
+      field: "ApprovedAt",
+      headerName: "Decision At",
+      width: 180,
+      renderCell: (row) => formatDate(row.ApprovedAt)
+    },
+    {
+      field: "ApprovalLatencySecs",
+      headerName: "Min Assign→Decision",
+      width: 180,
+      renderCell: (row) => formatMinutes(row.ApprovalLatencySecs)
+    },
+    { 
+      field: "Decision", 
+      headerName: "Decision", 
+      width: 120,
+      renderCell: (row) => row.Decision || "—"
+    },
+    {
+      field: "AttachmentViewsCount",
+      headerName: "Attachment Views",
+      width: 150,
+      renderCell: (row) => (row.AttachmentViewsCount ?? 0).toString()
+    },
+    {
+      field: "AttachmentFirstViewedAt",
+      headerName: "First Attachment View",
+      width: 200,
+      renderCell: (row) => formatDate(row.AttachmentFirstViewedAt)
+    },
+  ];
+}, []);
   async function run() {
     setErr(""); setLoading(true);
     try {

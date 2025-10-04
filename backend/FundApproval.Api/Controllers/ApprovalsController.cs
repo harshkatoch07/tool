@@ -418,41 +418,74 @@ request.CurrentLevel = finalLevel;
                 }
 
                 case "sentback":
-                {
-                    var sentBack = await _db.Approvals
-                        .Include(a => a.FundRequest).ThenInclude(fr => fr.Workflow)
-                        .Include(a => a.FundRequest).ThenInclude(fr => fr.Department)
-                        .Where(a => 
-                            // Show sent back requests where:
-                            // 1. User is the current approver (request was sent back to them)
-                            (a.ApproverId == userId && 
-                             a.Status == StatusPending && 
-                             a.FundRequest.Status == StatusSentBack) ||
-                            // 2. User is the initiator and request is sent back to level 0
-                            (a.FundRequest.InitiatorId == userId && 
-                             a.FundRequest.Status == StatusSentBack && 
-                             a.FundRequest.CurrentLevel == 0)
-                        )
-                        .OrderByDescending(a => a.FundRequest.CreatedAt)
-                        .Select(a => new
-                        {
-                             ApprovalId    = a.ApproverId == userId ? (int?)a.Id : null,
-                            Status        = a.Status,
-                            Comments      = (string?)null,
-                            ActionedAt    = (DateTime?)null,
-                            Level         = a.FundRequest.CurrentLevel,
-                            FundRequestId = a.FundRequest.Id,
-                            Title         = a.FundRequest.RequestTitle,
-                            WorkflowName  = a.FundRequest.Workflow != null ? a.FundRequest.Workflow.Name : null,
-                            Amount        = a.FundRequest.Amount,             // ✅
-                            Department    = a.FundRequest.Department != null ? a.FundRequest.Department.Name : null,
-                             CreatedAt     = a.FundRequest.CreatedAt,
-                            IsPendingForMe = a.ApproverId == userId
-                        })
-                        .ToListAsync();
+{
+    var userId = GetUserIdOrThrow();
 
-                    return Ok(sentBack);
-                }
+    // A) Sent back to me (or initiator at level 0)
+    var sentBackToMe = _db.Approvals
+        .AsNoTracking()
+        .Include(a => a.FundRequest).ThenInclude(fr => fr.Workflow)
+        .Include(a => a.FundRequest).ThenInclude(fr => fr.Department)
+        .Where(a =>
+            // pending for me while request is in SentBack
+            (a.ApproverId == userId &&
+             a.Status == StatusPending &&
+             a.FundRequest.Status == StatusSentBack)
+            ||
+            // initiator case: level 0, request is SentBack
+            (a.FundRequest.InitiatorId == userId &&
+             a.FundRequest.Status == StatusSentBack &&
+             a.FundRequest.CurrentLevel == 0)
+        )
+        .Select(a => new
+        {
+            FundRequestId = a.FundRequest.Id,
+            ApprovalId    = a.ApproverId == userId ? (int?)a.Id : null,
+            Title         = a.FundRequest.RequestTitle,
+            WorkflowName  = a.FundRequest.Workflow != null ? a.FundRequest.Workflow.Name : null,
+            Amount        = a.FundRequest.Amount,
+            Department    = a.FundRequest.Department != null ? a.FundRequest.Department.Name : null,
+            Level         = a.FundRequest.CurrentLevel,
+            CreatedAt     = a.FundRequest.CreatedAt,
+            LastDate      = (DateTime?)a.ActionedAt ?? a.FundRequest.CreatedAt,
+            IsPendingForMe = a.ApproverId == userId
+        });
+
+    // B) I sent it back (my latest action on that request = SentBack)
+    var iSentBack =
+        from a in _db.Approvals.AsNoTracking()
+        where a.ApproverId == userId && a.ActionedAt != null
+        group a by a.FundRequestId into g
+        let last = g.OrderByDescending(x => x.ActionedAt).ThenByDescending(x => x.Id).FirstOrDefault()
+        where last != null && last.Status == StatusSentBack
+        join fr in _db.FundRequests.AsNoTracking() on g.Key equals fr.Id
+        join wf in _db.Workflows.AsNoTracking() on fr.WorkflowId equals wf.WorkflowId into wf0
+        from wf in wf0.DefaultIfEmpty()
+        join d in _db.Departments.AsNoTracking() on fr.DepartmentId equals d.DepartmentID into d0
+        from d in d0.DefaultIfEmpty()
+        select new
+        {
+            FundRequestId = fr.Id,
+            ApprovalId    = (int?)null, // not currently assigned to me
+            Title         = fr.RequestTitle,
+            WorkflowName  = wf != null ? wf.Name : null,
+            Amount        = fr.Amount,
+            Department    = d != null ? d.Name : null,
+            Level         = fr.CurrentLevel,
+            CreatedAt     = fr.CreatedAt,
+            LastDate      = last.ActionedAt,
+            IsPendingForMe = false
+        };
+
+    var items = await sentBackToMe
+        .Union(iSentBack)
+        .GroupBy(x => x.FundRequestId)
+        .Select(g => g.OrderByDescending(x => x.LastDate).First())
+        .OrderByDescending(x => x.LastDate)
+        .ToListAsync();
+
+    return Ok(items);
+}
 
                 default:
                     return BadRequest("Invalid filter. Use 'assigned', 'initiated', 'approved', 'rejected', 'sentback', or 'final'.");
